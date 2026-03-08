@@ -13,6 +13,10 @@ import { MazeSolvers } from '../solvers/MazeSolvers';
 
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const { type, algorithm, data, size, rows, cols } = e.data;
+  if (!data && type !== 'n-queens') {
+    self.postMessage({ error: "Missing puzzle data" });
+    return;
+  }
   let result: any;
 
   try {

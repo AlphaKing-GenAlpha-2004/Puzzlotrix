@@ -20,7 +20,8 @@ export class KenKenSolver {
     }
 
     // Basic backtracking solver for smaller grids
-    const size = grid.length;
+    const size = grid?.length || 0;
+    if (size === 0 || !grid[0]) return { solution: null, stats: { timeMs: performance.now() - startTime, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
     const resultGrid = grid.map((row: any) => [...row]);
     
     const isValid = (r: number, c: number, val: number): boolean => {

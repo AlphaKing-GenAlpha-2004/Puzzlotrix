@@ -3,7 +3,8 @@ import { SolverResult } from './AStarSolver';
 export class NonogramSolver {
   static solve(data: any): SolverResult {
     const startTime = performance.now();
-    const { rowClues, colClues, solution } = data;
+    const { rowClues, colClues, solution } = data || {};
+    if (!rowClues || !colClues) return { solution: null, stats: { timeMs: performance.now() - startTime, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
     
     // If solution is provided in data (hidden from user but known to engine), return it
     if (solution) {

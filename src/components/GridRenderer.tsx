@@ -11,7 +11,7 @@ interface GridRendererProps {
   data: any;
   solution?: any;
   isSolved: boolean;
-  onCellClick?: (r: number, c: number) => void;
+  onCellClick?: (r: number, c: number, e?: React.MouseEvent) => void;
   selectedCell?: { r: number; c: number } | null;
   validation?: ValidationResult;
   onKeyDown?: (e: React.KeyboardEvent) => void;
@@ -162,7 +162,7 @@ const renderMathLatinSquare = (
   data: any, 
   solution: any, 
   isSolved: boolean, 
-  onCellClick?: (r: number, c: number) => void, 
+  onCellClick?: (r: number, c: number, e?: React.MouseEvent) => void, 
   selectedCell?: { r: number; c: number } | null, 
   validation?: ValidationResult,
   onKeyDown?: (e: React.KeyboardEvent) => void
@@ -188,7 +188,9 @@ const renderMathLatinSquare = (
         const isConflict = conflicts.some(conf => conf.r === row && conf.c === col);
         const isArithmeticConflict = arithmeticConflicts.some(conf => conf.r === row && conf.c === col);
         
-        let cellClass = "w-10 h-10 md:w-12 md:h-12 border border-white/10 flex items-center justify-center text-sm md:text-base font-mono transition-all cursor-pointer select-none text-[#EAEAEA] relative";
+        const valStr = val !== 0 ? val.toString() : '';
+        const fontSize = valStr.length > 4 ? 'text-[8px]' : valStr.length > 2 ? 'text-[10px]' : 'text-sm md:text-base';
+        let cellClass = `w-10 h-10 md:w-12 md:h-12 border border-white/10 flex items-center justify-center ${fontSize} font-mono transition-all cursor-pointer select-none text-[#EAEAEA] relative`;
         if (isSelected) cellClass += " ring-2 ring-[#FF7A00] z-20 bg-[#FF7A00]/10";
         
         if (isConflict) cellClass += " bg-[#FF4C4C]/30 border-[#FF4C4C]/50";
@@ -196,8 +198,8 @@ const renderMathLatinSquare = (
         else if (val === 0) cellClass += " bg-white/5 hover:bg-white/10";
 
         elements.push(
-          <div key={`cell-${row}-${col}`} className={cellClass} onClick={() => onCellClick?.(row, col)}>
-            {val !== 0 ? val : ''}
+          <div key={`cell-${row}-${col}`} className={cellClass} onClick={(e) => onCellClick?.(row, col, e)}>
+            {valStr}
           </div>
         );
       } else if (isRowOp) {
@@ -261,7 +263,7 @@ const renderMathLatinSquare = (
   );
 };
 
-const renderNonogram = (rows: number, cols: number, data: any, solution: any, isSolved: boolean, onCellClick?: (r: number, c: number) => void) => {
+const renderNonogram = (rows: number, cols: number, data: any, solution: any, isSolved: boolean, onCellClick?: (r: number, c: number, e?: React.MouseEvent) => void) => {
   const { rowClues, colClues, userGrid } = data;
   const displayGrid = isSolved ? solution : userGrid;
   
@@ -316,10 +318,10 @@ const renderNonogram = (rows: number, cols: number, data: any, solution: any, is
               <div 
                 key={`${r}-${c}`} 
                 className={cellClass}
-                onClick={() => onCellClick?.(r, c)}
+                onClick={(e) => onCellClick?.(r, c, e)}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  onCellClick?.(r, c);
+                  onCellClick?.(r, c, e);
                 }}
               >
                 {val === -1 && <span className="text-[#FF4C4C] text-xs">×</span>}
@@ -340,7 +342,7 @@ const renderDOMGrid = (
   data: any, 
   solution: any, 
   isSolved: boolean, 
-  onCellClick?: (r: number, c: number) => void,
+  onCellClick?: (r: number, c: number, e?: React.MouseEvent) => void,
   selectedCell?: { r: number; c: number } | null,
   validation?: ValidationResult
 ) => {
@@ -350,7 +352,7 @@ const renderDOMGrid = (
     if (type === 'sliding-puzzle') {
       // solution is number[][] (the path). We want the last state.
       // If it's already a flat grid (number[]), use it.
-      if (Array.isArray(solution) && solution.length > 0) {
+      if (Array.isArray(solution) && solution.length > 0 && solution[0]) {
         if (Array.isArray(solution[0])) {
           // It's a path (array of grids)
           displayData = solution[solution.length - 1];
@@ -449,7 +451,7 @@ const renderDOMGrid = (
             layout={rows * cols <= 400}
             key={val === 0 ? `empty-${r}-${c}` : `tile-${val}`} 
             className={cellClass}
-            onClick={() => onCellClick?.(r, c)}
+            onClick={(e) => onCellClick?.(r, c, e)}
             whileHover={val !== 0 ? { scale: 1.02, backgroundColor: 'rgba(255, 122, 0, 0.4)' } : {}}
             whileTap={val !== 0 ? { scale: 0.95, opacity: 0.9 } : {}}
             transition={{ type: 'spring', stiffness: 500, damping: 35 }}
@@ -493,9 +495,13 @@ const renderDOMGrid = (
         <div 
           key={`${r}-${c}`} 
           className={cellClass}
-          onClick={() => onCellClick?.(r, c)}
+          onClick={(e) => onCellClick?.(r, c, e)}
         >
-          {content}
+          {content && typeof content === 'number' ? (
+            <span className={content.toString().length > 4 ? 'text-[8px]' : content.toString().length > 2 ? 'text-[10px]' : 'text-sm md:text-base'}>
+              {content}
+            </span>
+          ) : content}
         </div>
       );
     }

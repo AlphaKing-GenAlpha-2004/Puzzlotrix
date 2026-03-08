@@ -4,7 +4,8 @@ import { MathLatinSquareData, MathOp } from '../types';
 export class BacktrackingSolver {
   static solveSudoku(grid: number[][], algorithm: string = 'backtracking'): SolverResult {
     const startTime = performance.now();
-    const size = grid.length;
+    const size = grid?.length || 0;
+    if (size === 0 || !grid[0]) return { solution: null, stats: { timeMs: performance.now() - startTime, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
     const board = grid.map(row => [...row]);
     let iterations = 0;
     let nodesExpanded = 0;
@@ -103,7 +104,8 @@ export class BacktrackingSolver {
 
   static solveLatinSquare(grid: number[][], algorithm: string = 'backtracking'): SolverResult {
     const startTime = performance.now();
-    const size = grid.length;
+    const size = grid?.length || 0;
+    if (size === 0 || !grid[0]) return { solution: null, stats: { timeMs: performance.now() - startTime, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
     const board = grid.map(row => [...row]);
     let iterations = 0;
     let nodesExpanded = 0;
@@ -134,7 +136,8 @@ export class BacktrackingSolver {
 
   static solveMathLatinSquare(data: MathLatinSquareData, algorithm: string = 'backtracking'): SolverResult {
     const startTime = performance.now();
-    const size = data.grid.length;
+    const size = data?.grid?.length || 0;
+    if (size === 0 || !data.grid[0]) return { solution: null, stats: { timeMs: performance.now() - startTime, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
     const board = data.grid.map(row => [...row]);
     let iterations = 0;
     let nodesExpanded = 0;

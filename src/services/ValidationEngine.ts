@@ -102,7 +102,8 @@ export class ValidationEngine {
   }
 
   private static validateMathLatinSquare(size: number, data: MathLatinSquareData, solution?: any): ValidationResult {
-    const grid = data.grid;
+    const grid = data?.grid || [];
+    if (!grid || grid.length === 0) return { isValid: false, isComplete: false, isFull: false, conflicts: [], errors: ["Grid data missing."] };
     const conflicts: { r: number; c: number }[] = [];
     const arithmeticConflicts: { r: number; c: number }[] = [];
     const errors: string[] = [];
@@ -128,7 +129,7 @@ export class ValidationEngine {
     let isFull = true;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (grid[r][c] === 0) isFull = false;
+        if (grid[r]?.[c] === 0) isFull = false;
       }
     }
 
@@ -139,7 +140,9 @@ export class ValidationEngine {
         const res = calculate(rowValues, data.rowOps[r]);
         if (Math.abs(res - data.rowTargets[r]) > 0.001) {
           for (let c = 0; c < size; c++) arithmeticConflicts.push({ r, c });
-          errors.push("Row arithmetic constraint violated.");
+          if (!errors.includes("Row arithmetic constraint violated.")) {
+            errors.push("Row arithmetic constraint violated.");
+          }
         }
       }
     }
@@ -151,18 +154,8 @@ export class ValidationEngine {
         const res = calculate(colValues, data.colOps[c]);
         if (Math.abs(res - data.colTargets[c]) > 0.001) {
           for (let r = 0; r < size; r++) arithmeticConflicts.push({ r, c });
-          errors.push("Column arithmetic constraint violated.");
-        }
-      }
-    }
-
-    // Solution comparison if provided
-    if (solution && isFull) {
-      for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
-          if (grid[r][c] !== solution[r][c]) {
-            conflicts.push({ r, c });
-            if (!errors.includes("Solution mismatch.")) errors.push("Solution mismatch.");
+          if (!errors.includes("Column arithmetic constraint violated.")) {
+            errors.push("Column arithmetic constraint violated.");
           }
         }
       }
@@ -224,6 +217,7 @@ export class ValidationEngine {
   }
 
   private static validateSudoku(size: number, grid: number[][], solution?: any): ValidationResult {
+    if (!grid || grid.length === 0) return { isValid: false, isComplete: false, isFull: false, conflicts: [], errors: ["Grid data missing."] };
     const conflicts: { r: number; c: number }[] = [];
     const errors: string[] = [];
     const n = Math.sqrt(size);
@@ -231,7 +225,7 @@ export class ValidationEngine {
     let isFull = true;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (grid[r][c] === 0) isFull = false;
+        if (grid[r]?.[c] === 0) isFull = false;
       }
     }
 
@@ -239,7 +233,7 @@ export class ValidationEngine {
     for (let r = 0; r < size; r++) {
       const seen = new Map<number, number[]>();
       for (let c = 0; c < size; c++) {
-        const val = grid[r][c];
+        const val = grid[r]?.[c];
         if (val === 0) continue;
         if (!seen.has(val)) seen.set(val, []);
         seen.get(val)!.push(c);
@@ -256,7 +250,7 @@ export class ValidationEngine {
     for (let c = 0; c < size; c++) {
       const seen = new Map<number, number[]>();
       for (let r = 0; r < size; r++) {
-        const val = grid[r][c];
+        const val = grid[r]?.[c];
         if (val === 0) continue;
         if (!seen.has(val)) seen.set(val, []);
         seen.get(val)!.push(r);
@@ -278,7 +272,7 @@ export class ValidationEngine {
             for (let c = 0; c < n; c++) {
               const row = br * n + r;
               const col = bc * n + c;
-              const val = grid[row][col];
+              const val = grid[row]?.[col];
               if (val === 0) continue;
               if (!seen.has(val)) seen.set(val, []);
               seen.get(val)!.push({ r: row, c: col });
@@ -289,17 +283,6 @@ export class ValidationEngine {
               cells.forEach(cell => conflicts.push(cell));
               errors.push(`Duplicate number in subgrid`);
             }
-          }
-        }
-      }
-    }
-
-    if (solution && isFull) {
-      for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
-          if (grid[r][c] !== solution[r][c]) {
-            conflicts.push({ r, c });
-            if (!errors.includes("Solution mismatch.")) errors.push("Solution mismatch.");
           }
         }
       }
@@ -397,7 +380,8 @@ export class ValidationEngine {
   }
 
   private static validateKenKen(size: number, data: any, solution?: any): ValidationResult {
-    const grid = data.grid;
+    const grid = data?.grid || [];
+    if (!grid || grid.length === 0) return { isValid: false, isComplete: false, isFull: false, conflicts: [], errors: ["Grid data missing."] };
     const cages: KenKenCage[] = data.cages;
     const conflicts: { r: number; c: number }[] = [];
     const errors: string[] = [];
@@ -410,13 +394,13 @@ export class ValidationEngine {
     let isFull = true;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (grid[r][c] === 0) isFull = false;
+        if (grid[r]?.[c] === 0) isFull = false;
       }
     }
 
     // Cage rules
     for (const cage of cages) {
-      const values = cage.cells.map(cell => grid[cell.r][cell.c]).filter(v => v !== 0);
+      const values = cage.cells.map(cell => grid[cell.r]?.[cell.c]).filter(v => v !== undefined && v !== 0);
       if (values.length === cage.cells.length) {
         // Cage is full, validate arithmetic
         let result = 0;
@@ -437,17 +421,8 @@ export class ValidationEngine {
 
         if (Math.abs(result - target) > 0.001) {
           cage.cells.forEach(cell => conflicts.push(cell));
-          errors.push("Cage arithmetic constraint not satisfied.");
-        }
-      }
-    }
-
-    if (solution && isFull) {
-      for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
-          if (grid[r][c] !== solution[r][c]) {
-            conflicts.push({ r, c });
-            if (!errors.includes("Solution mismatch.")) errors.push("Solution mismatch.");
+          if (!errors.includes("Cage arithmetic constraint not satisfied.")) {
+            errors.push("Cage arithmetic constraint not satisfied.");
           }
         }
       }

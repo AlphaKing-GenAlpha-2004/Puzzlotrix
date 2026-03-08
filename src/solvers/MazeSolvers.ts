@@ -3,8 +3,8 @@ import { SolverResult } from './AStarSolver';
 export class MazeSolvers {
   static deadEndFilling(grid: number[][], start: { r: number; c: number }, end: { r: number; c: number }): SolverResult {
     const startTime = performance.now();
-    const rows = grid.length;
-    if (rows === 0) return { solution: [], visited: [], stats: { timeMs: 0, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
+    const rows = grid?.length || 0;
+    if (rows === 0 || !grid[0]) return { solution: [], visited: [], stats: { timeMs: 0, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
     const cols = grid[0].length;
     const tempGrid = grid.map(row => [...row]);
     let iterations = 0;

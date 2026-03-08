@@ -3,7 +3,8 @@ import { SolverResult } from './AStarSolver';
 export class BFSSolver {
   static solveMaze(grid: number[][], start: { r: number; c: number }, end: { r: number; c: number }): SolverResult {
     const startTime = performance.now();
-    const size = grid.length;
+    const size = grid?.length || 0;
+    if (size === 0 || !grid[0]) return { solution: null, stats: { timeMs: performance.now() - startTime, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
     const queue: { r: number; c: number; path: { r: number; c: number }[] }[] = [{ ...start, path: [start] }];
     const visited = new Set<string>();
     visited.add(`${start.r},${start.c}`);

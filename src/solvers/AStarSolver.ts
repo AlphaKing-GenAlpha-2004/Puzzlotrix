@@ -69,8 +69,8 @@ class PriorityQueue<T> {
 export class AStarSolver {
   static solveMaze(grid: number[][], start: { r: number; c: number }, end: { r: number; c: number }, algorithm: string = 'astar-manhattan'): SolverResult {
     const startTime = performance.now();
-    const rows = grid.length;
-    if (rows === 0) return { solution: [], stats: { timeMs: 0, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
+    const rows = grid?.length || 0;
+    if (rows === 0 || !grid[0]) return { solution: [], stats: { timeMs: 0, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
     const cols = grid[0].length;
     const pq = new PriorityQueue<{ r: number; c: number; g: number; f: number; parent?: any }>();
     const closedSet = new Set<string>();

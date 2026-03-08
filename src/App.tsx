@@ -18,6 +18,9 @@ import { calculateStateSpace } from './utils/math';
 import { motion, AnimatePresence } from 'motion/react';
 import { Github, Info, AlertTriangle, CheckCircle2, Play } from 'lucide-react';
 import { ValidationEngine, ValidationResult } from './services/ValidationEngine';
+import { InfoModal } from './components/InfoModal';
+import { Leaderboard } from './components/Leaderboard';
+import { Trophy } from 'lucide-react';
 
 export default function App() {
   const [puzzleType, setPuzzleType] = useState<PuzzleType>('math-latin-square');
@@ -42,6 +45,9 @@ export default function App() {
   const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
   const [timer, setTimer] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [username, setUsername] = useState<string>(localStorage.getItem('puzzlotrix_user') || '');
 
   useEffect(() => {
     let interval: any;
@@ -128,7 +134,7 @@ export default function App() {
       let finalRows = puzzleType === 'sliding-puzzle' ? Math.max(3, Math.min(10, rows)) : clampedSize;
       let finalCols = puzzleType === 'sliding-puzzle' ? Math.max(3, Math.min(10, cols)) : clampedSize;
 
-      if (puzzleType === 'maze' && data?.grid && data.grid.length > 0) {
+      if (puzzleType === 'maze' && data?.grid && Array.isArray(data.grid) && data.grid.length > 0 && data.grid[0]) {
         finalRows = data.grid.length;
         finalCols = data.grid[0].length;
       }
@@ -272,6 +278,11 @@ export default function App() {
       setTimer(Math.floor((solveEndTime - solveStartTime) / 1000));
       setSuccess("Solved Correctly");
       setValidation({ isValid: true, isComplete: true, isFull: true, conflicts: [], errors: [] });
+
+      // Auto-submit score if it was a manual solve (not AI solve)
+      // Actually, let's only submit if it's a manual solve. 
+      // But handleSolve is the AI solver. 
+      // Manual solve happens in handleCellClick/handleKeyDown.
     } catch (err: any) {
       console.error("Solve failed:", err);
       setError(err.message || "Solving failed.");
@@ -285,7 +296,7 @@ export default function App() {
     setIsSolving(false);
   };
 
-  const handleCellClick = (r: number, c: number) => {
+  const handleCellClick = (r: number, c: number, e?: React.MouseEvent) => {
     if (!puzzle || isSolving || puzzle.isSolved || isPaused) return;
     setError(null);
     setSuccess(null);
@@ -438,8 +449,6 @@ export default function App() {
 
     if (['sudoku', 'kenken', 'math-latin-square'].includes(puzzle.type)) {
       const key = e.key;
-      const num = parseInt(key);
-      
       const isSimpleGrid = puzzle.type === 'sudoku';
       const currentGrid = isSimpleGrid ? puzzle.data : puzzle.data.grid;
       
@@ -450,13 +459,21 @@ export default function App() {
           ...puzzle,
           data: isSimpleGrid ? newGrid : { ...puzzle.data, grid: newGrid }
         });
-      } else if (!isNaN(num) && num > 0 && num <= puzzle.size) {
-        const newGrid = currentGrid.map((row: any) => [...row]);
-        newGrid[selectedCell.r][selectedCell.c] = num;
-        setPuzzle({
-          ...puzzle,
-          data: isSimpleGrid ? newGrid : { ...puzzle.data, grid: newGrid }
-        });
+      } else if (/^[0-9]$/.test(key)) {
+        const num = parseInt(key);
+        const currentVal = currentGrid[selectedCell.r][selectedCell.c];
+        
+        // Allow up to 6 digits (999,999) as requested
+        const combinedStr = currentVal === 0 ? `${num}` : `${currentVal}${num}`;
+        if (combinedStr.length <= 6) {
+          const newVal = parseInt(combinedStr);
+          const newGrid = currentGrid.map((row: any) => [...row]);
+          newGrid[selectedCell.r][selectedCell.c] = newVal;
+          setPuzzle({
+            ...puzzle,
+            data: isSimpleGrid ? newGrid : { ...puzzle.data, grid: newGrid }
+          });
+        }
       }
     }
   };
@@ -506,6 +523,9 @@ export default function App() {
     if (result.isComplete) {
       setSuccess("Solved Correctly");
       setPuzzle({ ...puzzle, isSolved: true });
+      
+      // Submit score to backend
+      submitScore(puzzle, timer);
     } else if (!result.isFull) {
       setError("Incomplete: Some cells are empty.");
     } else if (!result.isValid) {
@@ -544,6 +564,33 @@ export default function App() {
     setError(null);
   };
 
+  const submitScore = async (p: PuzzleState, time: number) => {
+    let name = username;
+    if (!name) {
+      name = prompt("Enter your name for the leaderboard:") || "Anonymous";
+      setUsername(name);
+      localStorage.setItem('puzzlotrix_user', name);
+    }
+
+    try {
+      await fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: name,
+          puzzle_type: p.type,
+          grid_size: p.size,
+          time_ms: time * 1000,
+          moves: p.moves || 0,
+          seed: p.actualSeed
+        })
+      });
+      setSuccess("Score submitted to leaderboard!");
+    } catch (err) {
+      console.error("Failed to submit score:", err);
+    }
+  };
+
   const stateSpace = calculateStateSpace(puzzleType, gridSize, puzzle?.rows, puzzle?.cols);
 
   return (
@@ -564,15 +611,48 @@ export default function App() {
           </p>
         </motion.div>
 
-        <div className="flex gap-4">
-          <a href="#" className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
-            <Github size={20} />
-          </a>
-          <button className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
-            <Info size={20} />
-          </button>
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex flex-col items-end">
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">Player</span>
+            <span className="text-xs font-black italic text-orange-500">{username || 'Anonymous'}</span>
+          </div>
+          <div className="flex gap-4">
+            <a 
+              href="https://github.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white"
+              title="View Source"
+            >
+              <Github size={20} />
+            </a>
+            <button 
+              onClick={() => setIsInfoModalOpen(true)}
+              className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white"
+              title="Information"
+            >
+              <Info size={20} />
+            </button>
+            <button 
+              onClick={() => setIsLeaderboardOpen(true)}
+              className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white"
+              title="Leaderboard"
+            >
+              <Trophy size={20} />
+            </button>
+          </div>
         </div>
       </header>
+
+      <InfoModal isOpen={isInfoModalOpen} onClose={() => setIsInfoModalOpen(false)} />
+      <Leaderboard 
+        isOpen={isLeaderboardOpen} 
+        onClose={() => setIsLeaderboardOpen(false)} 
+        puzzleType={puzzleType}
+        gridSize={gridSize}
+        username={username}
+        setUsername={setUsername}
+      />
 
       <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-8 items-start">
         <motion.div
