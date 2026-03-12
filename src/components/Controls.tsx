@@ -193,12 +193,13 @@ export const Controls: React.FC<ControlsProps> = ({
               <input
                 type="range"
                 min={MIN_GRID_SIZE}
-                max={MAX_GRID_SIZE}
+                max={puzzleType === 'sudoku' ? 49 : MAX_GRID_SIZE}
                 value={gridSize}
                 disabled={isSolving}
                 onChange={(e) => {
                   let val = parseInt(e.target.value);
                   if (puzzleType === 'sudoku') {
+                    val = Math.min(49, val);
                     const root = Math.sqrt(val);
                     if (!Number.isInteger(root)) {
                       const nearestRoot = Math.round(root);
@@ -212,12 +213,13 @@ export const Controls: React.FC<ControlsProps> = ({
               <input 
                 type="number"
                 min={MIN_GRID_SIZE}
-                max={MAX_GRID_SIZE}
+                max={puzzleType === 'sudoku' ? 49 : MAX_GRID_SIZE}
                 value={gridSize}
                 disabled={isSolving}
                 onChange={(e) => {
+                  const maxLimit = puzzleType === 'sudoku' ? 49 : MAX_GRID_SIZE;
                   let val = parseInt(e.target.value) || MIN_GRID_SIZE;
-                  val = Math.max(MIN_GRID_SIZE, Math.min(MAX_GRID_SIZE, val));
+                  val = Math.max(MIN_GRID_SIZE, Math.min(maxLimit, val));
                   
                   if (puzzleType === 'sudoku') {
                     const root = Math.sqrt(val);
@@ -348,7 +350,7 @@ export const Controls: React.FC<ControlsProps> = ({
         )}
       </div>
 
-      {['nonogram', 'kenken', 'sudoku', 'math-latin-square', 'n-queens'].includes(puzzleType) && !isSolving && (
+      {['nonogram', 'kenken', 'sudoku', 'math-latin-square', 'n-queens', 'maze', 'minesweeper', 'sliding-puzzle'].includes(puzzleType) && !isSolving && (
         <div className="flex gap-2">
           <button
             onClick={onCheck}

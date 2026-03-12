@@ -384,9 +384,11 @@ const renderDOMGrid = (
         const val = Array.isArray(displayData) ? displayData[r]?.[c] : displayData?.grid?.[r]?.[c];
         content = val !== 0 ? val : '';
         if (val === 0 && !isSelected && !isConflict) cellClass += " bg-white/5";
-        if (size === 9) {
-          if (c % 3 === 2 && c !== 8) cellClass += " border-r-2 border-r-white/30";
-          if (r % 3 === 2 && r !== 8) cellClass += " border-b-2 border-b-white/30";
+        
+        const n = Math.sqrt(size);
+        if (Number.isInteger(n)) {
+          if ((c + 1) % n === 0 && c !== size - 1) cellClass += " border-r-2 border-r-white/30";
+          if ((r + 1) % n === 0 && r !== size - 1) cellClass += " border-b-2 border-b-white/30";
         }
       } else if (type === 'maze') {
         const isWall = data?.grid?.[r]?.[c] === 1;
@@ -423,12 +425,15 @@ const renderDOMGrid = (
       } else if (type === 'minesweeper') {
         const val = data?.grid?.[r]?.[c];
         const revealed = isSolved || (data?.revealed && data.revealed[r]?.[c]);
+        const flagged = data?.flagged && data.flagged[r]?.[c];
+        
         if (revealed) {
           if (val === -1) content = '💣';
           else if (val > 0) content = val;
           cellClass += " bg-white/10";
         } else {
           cellClass += " bg-neutral-700 hover:bg-neutral-600 cursor-pointer";
+          if (flagged) content = '🚩';
         }
       } else if (type === 'sliding-puzzle') {
         const grid = Array.isArray(displayData) ? displayData : displayData?.grid;
@@ -496,6 +501,10 @@ const renderDOMGrid = (
           key={`${r}-${c}`} 
           className={cellClass}
           onClick={(e) => onCellClick?.(r, c, e)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onCellClick?.(r, c, e);
+          }}
         >
           {content && typeof content === 'number' ? (
             <span className={content.toString().length > 4 ? 'text-[8px]' : content.toString().length > 2 ? 'text-[10px]' : 'text-sm md:text-base'}>

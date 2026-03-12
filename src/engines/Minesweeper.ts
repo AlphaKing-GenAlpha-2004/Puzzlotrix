@@ -23,6 +23,16 @@ export class MinesweeperEngine {
     }
     
     // Calculate numbers
+    this.calculateNumbers(grid, size);
+    
+    return {
+      grid,
+      revealed: Array.from({ length: size }, () => Array(size).fill(false)),
+      flagged: Array.from({ length: size }, () => Array(size).fill(false))
+    };
+  }
+
+  static calculateNumbers(grid: number[][], size: number) {
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (grid[r][c] === -1) continue;
@@ -39,11 +49,5 @@ export class MinesweeperEngine {
         grid[r][c] = count;
       }
     }
-    
-    return {
-      grid,
-      revealed: Array.from({ length: size }, () => Array(size).fill(false)),
-      flagged: Array.from({ length: size }, () => Array(size).fill(false))
-    };
   }
 }

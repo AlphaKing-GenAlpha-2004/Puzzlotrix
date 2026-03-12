@@ -33,14 +33,15 @@ async function startServer() {
 
   // API Routes
   app.get("/api/leaderboard", (req, res) => {
-    const { type, size } = req.query;
+    const { type, size, limit } = req.query;
+    const maxLimit = limit ? Math.min(100, parseInt(limit as string)) : 10;
     try {
       let stmt;
       if (type && size) {
-        stmt = db.prepare("SELECT * FROM leaderboard WHERE puzzle_type = ? AND grid_size = ? ORDER BY time_ms ASC LIMIT 10");
-        res.json(stmt.all(type, size));
+        stmt = db.prepare("SELECT * FROM leaderboard WHERE puzzle_type = ? AND grid_size = ? ORDER BY time_ms ASC LIMIT ?");
+        res.json(stmt.all(type, size, maxLimit));
       } else {
-        stmt = db.prepare("SELECT * FROM leaderboard ORDER BY created_at DESC LIMIT 50");
+        stmt = db.prepare("SELECT * FROM leaderboard ORDER BY created_at DESC LIMIT 100");
         res.json(stmt.all());
       }
     } catch (err) {

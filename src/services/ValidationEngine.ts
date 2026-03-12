@@ -209,7 +209,7 @@ export class ValidationEngine {
     
     return {
       isValid: found,
-      isComplete: found && !!solution,
+      isComplete: found,
       isFull: true, // Maze is always "full" in this context
       conflicts: [],
       errors: found ? [] : ["No path exists between Start and End."]

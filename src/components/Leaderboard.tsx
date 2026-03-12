@@ -26,6 +26,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose, puzzl
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [localName, setLocalName] = useState(username);
+  const [view, setView] = useState<'top' | 'recent'>('top');
 
   useEffect(() => {
     setLocalName(username);
@@ -39,7 +40,12 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose, puzzl
 
   useEffect(() => {
     if (isOpen) {
-      fetch(`/api/leaderboard?type=${puzzleType}&size=${gridSize}`)
+      setLoading(true);
+      const url = view === 'top' 
+        ? `/api/leaderboard?type=${puzzleType}&size=${gridSize}&limit=20`
+        : `/api/leaderboard`;
+        
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           setEntries(data);
@@ -50,7 +56,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose, puzzl
           setLoading(false);
         });
     }
-  }, [isOpen, puzzleType, gridSize]);
+  }, [isOpen, puzzleType, gridSize, view]);
 
   return (
     <AnimatePresence>
@@ -68,7 +74,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose, puzzl
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative w-full max-w-xl bg-[#121212] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[70vh]"
+            className="relative w-full max-w-xl bg-[#121212] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
           >
             <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/5">
               <div className="flex items-center gap-3">
@@ -78,12 +84,27 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose, puzzl
                 <div>
                   <h2 className="text-xl font-black uppercase tracking-tighter italic">Leaderboard</h2>
                   <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">
-                    {puzzleType.replace(/-/g, ' ')} // {gridSize}x{gridSize}
+                    {view === 'top' ? `${puzzleType.replace(/-/g, ' ')} // ${gridSize}x${gridSize}` : 'Global Recent Activity'}
                   </p>
                 </div>
               </div>
               <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
                 <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex p-2 bg-white/5 border-b border-white/5 gap-2">
+              <button 
+                onClick={() => setView('top')}
+                className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all ${view === 'top' ? 'bg-orange-500 text-white' : 'hover:bg-white/10 opacity-50'}`}
+              >
+                Top Scores
+              </button>
+              <button 
+                onClick={() => setView('recent')}
+                className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all ${view === 'recent' ? 'bg-orange-500 text-white' : 'hover:bg-white/10 opacity-50'}`}
+              >
+                Recent Games
               </button>
             </div>
 
@@ -138,8 +159,13 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose, puzzl
                           <User size={12} className="opacity-40" />
                           <span className="font-bold text-sm">{entry.username}</span>
                         </div>
-                        <div className="text-[10px] opacity-40 uppercase tracking-widest">
-                          {new Date(entry.created_at).toLocaleDateString()}
+                        <div className="text-[10px] opacity-40 uppercase tracking-widest flex gap-2">
+                          <span>{new Date(entry.created_at).toLocaleDateString()}</span>
+                          {view === 'recent' && (
+                            <span className="text-orange-500/60">
+                              • {entry.puzzle_type.replace(/-/g, ' ')} ({entry.grid_size}x{entry.grid_size})
+                            </span>
+                          )}
                         </div>
                       </div>
 

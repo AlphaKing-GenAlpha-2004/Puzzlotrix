@@ -80,6 +80,8 @@ export default function App() {
     const clampedSize = Math.max(MIN_GRID_SIZE, Math.min(MAX_GRID_SIZE, gridSize));
     const currentSeed = seed === null ? Math.floor(Math.random() * 1e12) : seed;
     
+    let finalSize = clampedSize;
+    
     try {
       switch (puzzleType) {
         case 'math-latin-square': {
@@ -89,8 +91,7 @@ export default function App() {
           break;
         }
         case 'sudoku': {
-          let finalSize = clampedSize;
-          const root = Math.sqrt(finalSize);
+          const root = Math.sqrt(clampedSize);
           if (!Number.isInteger(root)) {
             const nearestRoot = Math.round(root);
             finalSize = Math.max(4, nearestRoot * nearestRoot);
@@ -141,7 +142,7 @@ export default function App() {
 
       setPuzzle({
         type: puzzleType,
-        size: clampedSize,
+        size: finalSize,
         rows: finalRows,
         cols: finalCols,
         seed: seed,
@@ -301,6 +302,20 @@ export default function App() {
     setError(null);
     setSuccess(null);
 
+    // Handle Right Click (Flagging)
+    if (e && (e.button === 2 || e.type === 'contextmenu')) {
+      if (puzzle.type === 'minesweeper') {
+        if (puzzle.data.revealed[r][c]) return;
+        const newFlagged = puzzle.data.flagged.map((row: any) => [...row]);
+        newFlagged[r][c] = !newFlagged[r][c];
+        setPuzzle({
+          ...puzzle,
+          data: { ...puzzle.data, flagged: newFlagged }
+        });
+      }
+      return;
+    }
+
     if (puzzle.type === 'sudoku' || puzzle.type === 'kenken' || puzzle.type === 'math-latin-square') {
       setSelectedCell({ r, c });
       return;
@@ -352,21 +367,86 @@ export default function App() {
           setSuccess("Solved Correctly");
           newPuzzle.isSolved = true;
           setValidation({ isValid: true, isComplete: true, isFull: true, conflicts: [], errors: [] });
+          submitScore(newPuzzle, timer);
         }
         setPuzzle(newPuzzle);
       }
     } else if (puzzle.type === 'minesweeper') {
-      if (puzzle.data.revealed[r][c]) return;
+      if (puzzle.data.revealed[r][c] || puzzle.data.flagged[r][c]) return;
+      
       const newRevealed = puzzle.data.revealed.map((row: any) => [...row]);
+      const newGrid = puzzle.data.grid.map((row: any) => [...row]);
+      
+      // Safe First Click Logic
+      const isFirstClick = puzzle.data.revealed.every((row: any) => row.every((cell: any) => !cell));
+      if (isFirstClick && newGrid[r][c] === -1) {
+        // Move the mine to the first available safe spot
+        let moved = false;
+        for (let ri = 0; ri < puzzle.size && !moved; ri++) {
+          for (let ci = 0; ci < puzzle.size && !moved; ci++) {
+            if (newGrid[ri][ci] !== -1) {
+              newGrid[ri][ci] = -1;
+              newGrid[r][c] = 0; // Temporarily safe
+              moved = true;
+            }
+          }
+        }
+        // Recalculate numbers
+        MinesweeperEngine.calculateNumbers(newGrid, puzzle.size);
+      }
+
       newRevealed[r][c] = true;
-      if (puzzle.data.grid[r][c] === -1) {
+      
+      if (newGrid[r][c] === -1) {
         setError("Game Over! You hit a mine.");
-        setPuzzle({ ...puzzle, isSolved: true });
+        const revealedAll = puzzle.data.revealed.map((row: any, ri: number) => 
+          row.map((col: any, ci: number) => newGrid[ri][ci] === -1 ? true : col)
+        );
+        setPuzzle({ ...puzzle, isSolved: true, data: { ...puzzle.data, grid: newGrid, revealed: revealedAll } });
       } else {
-        setPuzzle({
+        // Flood fill for 0s
+        if (newGrid[r][c] === 0) {
+          const queue = [{ r, c }];
+          while (queue.length > 0) {
+            const curr = queue.shift()!;
+            for (let dr = -1; dr <= 1; dr++) {
+              for (let dc = -1; dc <= 1; dc++) {
+                const nr = curr.r + dr;
+                const nc = curr.c + dc;
+                if (nr >= 0 && nr < puzzle.size && nc >= 0 && nc < puzzle.size && !newRevealed[nr][nc]) {
+                  newRevealed[nr][nc] = true;
+                  if (newGrid[nr][nc] === 0) {
+                    queue.push({ r: nr, c: nc });
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        const newPuzzle = {
           ...puzzle,
-          data: { ...puzzle.data, revealed: newRevealed }
-        });
+          data: { ...puzzle.data, grid: newGrid, revealed: newRevealed }
+        };
+
+        // Check win condition: all non-mine cells revealed
+        let unrevealedSafeCells = 0;
+        for (let ri = 0; ri < puzzle.size; ri++) {
+          for (let ci = 0; ci < puzzle.size; ci++) {
+            if (newGrid[ri][ci] !== -1 && !newRevealed[ri][ci]) {
+              unrevealedSafeCells++;
+            }
+          }
+        }
+
+        if (unrevealedSafeCells === 0) {
+          setSuccess("Solved Correctly! All mines cleared.");
+          newPuzzle.isSolved = true;
+          setValidation({ isValid: true, isComplete: true, isFull: true, conflicts: [], errors: [] });
+          submitScore(newPuzzle, timer);
+        }
+
+        setPuzzle(newPuzzle);
       }
     } else if (puzzle.type === 'maze') {
       if (puzzle.data.grid[r][c] === 1) {
@@ -545,11 +625,21 @@ export default function App() {
     };
 
     // Overwrite userGrid with solutionGrid
-    if (['sudoku', 'math-latin-square', 'kenken', 'nonogram'].includes(puzzle.type)) {
+    if (['sudoku', 'math-latin-square', 'kenken', 'nonogram', 'n-queens', 'minesweeper'].includes(puzzle.type)) {
       if (puzzle.type === 'nonogram') {
         revealedPuzzle.data.userGrid = JSON.parse(JSON.stringify(puzzle.solution));
       } else if (puzzle.type === 'math-latin-square' || puzzle.type === 'kenken') {
         revealedPuzzle.data.grid = JSON.parse(JSON.stringify(puzzle.solution));
+      } else if (puzzle.type === 'n-queens') {
+        if (puzzle.solution) {
+          revealedPuzzle.data = JSON.parse(JSON.stringify(puzzle.solution));
+        } else {
+          // If no solution, we can't reveal easily without AI solve
+          setError("Use AI Solve to find the solution for N-Queens.");
+          return;
+        }
+      } else if (puzzle.type === 'minesweeper') {
+        revealedPuzzle.data.revealed = revealedPuzzle.data.revealed.map((row: any) => row.map(() => true));
       } else {
         revealedPuzzle.data = JSON.parse(JSON.stringify(puzzle.solution));
       }
