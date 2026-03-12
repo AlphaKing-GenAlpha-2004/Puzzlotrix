@@ -71,13 +71,13 @@ export const GridRenderer: React.FC<GridRendererProps> = ({
       }
 
       // Draw visited
-      ctx.fillStyle = 'rgba(255, 122, 0, 0.1)';
+      ctx.fillStyle = 'rgba(255, 122, 0, 0.3)';
       for (const v of visited) {
         ctx.fillRect(v.c * cellSize, v.r * cellSize, cellSize, cellSize);
       }
 
       // Draw frontier
-      ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.5)';
       for (const f of frontier) {
         ctx.fillRect(f.c * cellSize, f.r * cellSize, cellSize, cellSize);
       }
@@ -402,8 +402,8 @@ const renderDOMGrid = (
         else cellClass += " cursor-pointer hover:bg-white/5";
 
         if (onPath) cellClass += " bg-[#FF7A00]/50 shadow-[0_0_10px_rgba(255,122,0,0.5)] z-10";
-        else if (isVisited) cellClass += " bg-[#FF7A00]/10";
-        else if (isFrontier) cellClass += " bg-[#22C55E]/20";
+        else if (isVisited) cellClass += " bg-[#FF7A00]/30";
+        else if (isFrontier) cellClass += " bg-[#22C55E]/50";
 
         if (isStart) {
           content = (

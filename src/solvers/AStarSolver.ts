@@ -99,7 +99,7 @@ export class AStarSolver {
         return {
           solution: path.reverse(),
           visited,
-          frontier: [], // Not easily available from heap without extra work
+          frontier: (pq as any).heap.map((h: any) => ({ r: h.item.r, c: h.item.c })),
           stats: { timeMs: performance.now() - startTime, steps: path.length, iterations, depth: current.g, nodesExpanded, pathLength: path.length }
         };
       }

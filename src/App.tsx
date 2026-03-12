@@ -193,10 +193,12 @@ export default function App() {
       const result = await SolverEngine.solve(puzzle.type, solverConfig.algorithm, puzzle.data, puzzle.size, puzzle.rows, puzzle.cols);
       
       const isSliding = puzzle.type === 'sliding-puzzle';
-      const shouldAnimate = (isSliding || (puzzle.type === 'maze' && puzzle.size <= 300)) && !solverConfig.instant;
+      const isMaze = puzzle.type === 'maze';
+      const shouldAnimate = (isSliding || (isMaze && puzzle.size <= 500)) && (!solverConfig.instant || isMaze);
       
       if (shouldAnimate) {
         let speed = Math.max(1, 101 - solverConfig.speed);
+        if (isMaze && solverConfig.instant) speed = 1; // Fast animation if instant is on for maze
         
         if (isSliding && result.solution) {
           const path = result.solution;
@@ -215,22 +217,32 @@ export default function App() {
             setTimer(Math.floor((performance.now() - solveStartTime) / 1000));
             await new Promise(r => setTimeout(r, speed * 2)); // Sliding moves need more time to be visible
           }
-        } else if (puzzle.type === 'maze' && result.visited) {
+        } else if (isMaze && result.visited) {
           const visited = result.visited!;
           const frontier = result.frontier || [];
-          const stepSize = puzzle.size > 100 ? Math.max(5, Math.floor(visited.length / 100)) : 1;
+          // Adjust step size based on maze size and speed
+          const baseStep = Math.max(1, Math.floor(visited.length / (isMaze && solverConfig.instant ? 20 : 50)));
+          const stepSize = puzzle.size > 50 ? baseStep : 1;
           
           for (let i = 0; i < visited.length; i += stepSize) {
             if (!isSolving) break;
+            const currentVisited = visited.slice(0, i + stepSize);
+            const currentFrontier = frontier.slice(0, Math.min(frontier.length, i + stepSize));
+            
             setPuzzle(prev => prev ? {
               ...prev,
               data: {
                 ...prev.data,
-                currentVisited: visited.slice(0, i + 1),
-                currentFrontier: frontier.slice(0, i + 1)
+                currentVisited,
+                currentFrontier
               }
             } : null);
-            setTimer(Math.floor((performance.now() - solveStartTime) / 1000));
+            
+            // Update timer occasionally
+            if (i % (stepSize * 10) === 0) {
+              setTimer(Math.floor((performance.now() - solveStartTime) / 1000));
+            }
+            
             await new Promise(r => setTimeout(r, speed));
           }
         }
