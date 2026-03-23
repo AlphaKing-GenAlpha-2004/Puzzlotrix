@@ -1,54 +1,69 @@
 import express from "express";
-import Database from "better-sqlite3";
+import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const LEADERBOARD_FILE = path.join(__dirname, "leaderboard.json");
+
+interface LeaderboardEntry {
+  id: number;
+  username: string;
+  puzzle_type: string;
+  grid_size: number;
+  time_ms: number;
+  moves?: number;
+  seed?: number;
+  created_at: string;
+}
+
+async function getLeaderboard(): Promise<LeaderboardEntry[]> {
+  try {
+    const data = await fs.readFile(LEADERBOARD_FILE, "utf-8");
+    return JSON.parse(data);
+  } catch (err) {
+    return [];
+  }
+}
+
+async function saveLeaderboard(data: LeaderboardEntry[]) {
+  await fs.writeFile(LEADERBOARD_FILE, JSON.stringify(data, null, 2));
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Initialize Database
-  const db = new Database("puzzlotrix.db");
-  db.pragma("journal_mode = WAL");
-
-  // Create Leaderboard table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS leaderboard (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT NOT NULL,
-      puzzle_type TEXT NOT NULL,
-      grid_size INTEGER NOT NULL,
-      time_ms INTEGER NOT NULL,
-      moves INTEGER,
-      seed INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
   app.use(express.json());
 
   // API Routes
-  app.get("/api/leaderboard", (req, res) => {
+  app.get("/api/leaderboard", async (req, res) => {
     const { type, size, limit } = req.query;
     const maxLimit = limit ? Math.min(100, parseInt(limit as string)) : 10;
+    
     try {
-      let stmt;
+      let leaderboard = await getLeaderboard();
+      
       if (type && size) {
-        stmt = db.prepare("SELECT * FROM leaderboard WHERE puzzle_type = ? AND grid_size = ? ORDER BY time_ms ASC LIMIT ?");
-        res.json(stmt.all(type, size, maxLimit));
+        leaderboard = leaderboard
+          .filter(e => e.puzzle_type === type && e.grid_size === parseInt(size as string))
+          .sort((a, b) => a.time_ms - b.time_ms)
+          .slice(0, maxLimit);
       } else {
-        stmt = db.prepare("SELECT * FROM leaderboard ORDER BY created_at DESC LIMIT 100");
-        res.json(stmt.all());
+        leaderboard = leaderboard
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 100);
       }
+      
+      res.json(leaderboard);
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch leaderboard" });
     }
   });
 
-  app.post("/api/leaderboard", (req, res) => {
+  app.post("/api/leaderboard", async (req, res) => {
     const { username, puzzle_type, grid_size, time_ms, moves, seed } = req.body;
     
     if (!username || !puzzle_type || !grid_size || !time_ms) {
@@ -56,12 +71,22 @@ async function startServer() {
     }
 
     try {
-      const stmt = db.prepare(`
-        INSERT INTO leaderboard (username, puzzle_type, grid_size, time_ms, moves, seed)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      const result = stmt.run(username, puzzle_type, grid_size, time_ms, moves, seed);
-      res.json({ id: result.lastInsertRowid });
+      const leaderboard = await getLeaderboard();
+      const newEntry: LeaderboardEntry = {
+        id: Date.now(),
+        username,
+        puzzle_type,
+        grid_size: parseInt(grid_size),
+        time_ms: parseInt(time_ms),
+        moves: moves ? parseInt(moves) : undefined,
+        seed: seed ? parseInt(seed) : undefined,
+        created_at: new Date().toISOString()
+      };
+      
+      leaderboard.push(newEntry);
+      await saveLeaderboard(leaderboard);
+      
+      res.json({ id: newEntry.id });
     } catch (err) {
       res.status(500).json({ error: "Failed to save score" });
     }
