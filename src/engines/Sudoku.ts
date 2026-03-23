@@ -2,39 +2,70 @@ import { RNG } from '../utils/rng';
 
 export class SudokuEngine {
   static generate(size: number, difficulty: 'easy' | 'medium' | 'hard' | 'expert', rng: RNG) {
-    const grid = Array.from({ length: size * size }, () => Array(size * size).fill(0));
-    this.fillGrid(grid, size, rng);
+    const n = size * size;
+    const grid = Array.from({ length: n }, () => Array(n).fill(0));
+    
+    // Fast generation using shifting rows
+    const base = Array.from({ length: n }, (_, i) => i + 1);
+    const shuffledBase = rng.shuffle([...base]);
+    
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        // Shifting formula to ensure valid Sudoku constraints
+        const valIdx = (r * size + Math.floor(r / size) + c) % n;
+        grid[r][c] = shuffledBase[valIdx];
+      }
+    }
+
+    // Shuffle rows within each box
+    for (let b = 0; b < size; b++) {
+      const start = b * size;
+      const rows = grid.slice(start, start + size);
+      const shuffledRows = rng.shuffle(rows);
+      for (let i = 0; i < size; i++) {
+        grid[start + i] = shuffledRows[i];
+      }
+    }
+
+    // Shuffle columns within each box
+    for (let b = 0; b < size; b++) {
+      const start = b * size;
+      const colIndices = Array.from({ length: size }, (_, i) => start + i);
+      const shuffledIndices = rng.shuffle(colIndices);
+      
+      const tempGrid = grid.map(row => [...row]);
+      for (let r = 0; r < n; r++) {
+        for (let i = 0; i < size; i++) {
+          grid[r][start + i] = tempGrid[r][shuffledIndices[i]];
+        }
+      }
+    }
     
     const solution = grid.map(row => [...row]);
     
-    let attempts = 0;
     const removalCounts: Record<string, number> = {
-      easy: 30,
-      medium: 45,
-      hard: 55,
-      expert: 64
+      easy: 0.35,
+      medium: 0.5,
+      hard: 0.6,
+      expert: 0.7
     };
     
-    let toRemove = removalCounts[difficulty] || 40;
-    // Scale for different sizes (though standard is 3x3 subgrid, i.e., 9x9 total)
-    if (size !== 3) {
-      const totalCells = (size * size) ** 2;
-      toRemove = Math.floor(totalCells * (toRemove / 81));
-    }
+    const ratio = removalCounts[difficulty] || 0.5;
+    const totalCells = n * n;
+    let toRemove = Math.floor(totalCells * ratio);
 
-    while (toRemove > 0 && attempts < 100) {
-      const r = rng.nextInt(0, size * size - 1);
-      const c = rng.nextInt(0, size * size - 1);
-      
-      if (grid[r][c] !== 0) {
-        const backup = grid[r][c];
-        grid[r][c] = 0;
-        
-        // In a real app, we'd check for uniqueness here.
-        // For performance in this demo, we'll assume it's okay or just remove.
-        toRemove--;
+    // Randomly remove cells
+    const cells = [];
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        cells.push({ r, c });
       }
-      attempts++;
+    }
+    const shuffledCells = rng.shuffle(cells);
+
+    for (let i = 0; i < toRemove; i++) {
+      const { r, c } = shuffledCells[i];
+      grid[r][c] = 0;
     }
 
     return { grid, solution };

@@ -13,12 +13,19 @@ export class NonogramEngine {
     };
     const density = densities[difficulty] || 0.5;
 
+    let filled = 0;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (rng.next() < density) {
           grid[r][c] = 1;
+          filled++;
         }
       }
+    }
+
+    // Ensure at least one cell is filled
+    if (filled === 0) {
+      grid[rng.nextInt(0, size - 1)][rng.nextInt(0, size - 1)] = 1;
     }
 
     const rowClues = this.getClues(grid);
@@ -26,7 +33,7 @@ export class NonogramEngine {
 
     return { 
       solution: grid, 
-      grid: Array.from({ length: size }, () => Array(size).fill(0)),
+      userGrid: Array.from({ length: size }, () => Array(size).fill(0)),
       clues: { rowClues, colClues } 
     };
   }
@@ -49,6 +56,7 @@ export class NonogramEngine {
   }
 
   private static transpose(grid: number[][]): number[][] {
+    if (!grid || grid.length === 0 || !grid[0]) return [];
     return grid[0].map((_, c) => grid.map(row => row[c]));
   }
 }

@@ -10,6 +10,7 @@ export interface AlgorithmInfo {
 export const ALGORITHM_REGISTRY: Record<PuzzleType, AlgorithmInfo[]> = {
   'sliding-puzzle': [
     { value: 'astar-manhattan', label: 'A* (Manhattan)', description: 'Uses Manhattan distance heuristic.' },
+    { value: 'astar-weighted', label: 'Weighted A*', description: 'Faster than A* for larger grids.' },
     { value: 'astar-hamming', label: 'A* (Hamming)', description: 'Uses number of misplaced tiles.' },
     { value: 'bfs', label: 'BFS', description: 'Breadth-First Search. Guaranteed shortest path.', maxSize: 4 },
     { value: 'dfs', label: 'DFS', description: 'Depth-First Search. Educational mode.', maxSize: 3 },

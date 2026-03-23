@@ -1,8 +1,8 @@
 export class RNG {
   private seed: number;
 
-  constructor(seedStr: string) {
-    this.seed = this.hashString(seedStr);
+  constructor(seed: string | number) {
+    this.seed = typeof seed === 'string' ? this.hashString(seed) : seed;
   }
 
   private hashString(str: string): number {

@@ -1,5 +1,5 @@
-export const MIN_GRID_SIZE = 3;
-export const MAX_GRID_SIZE = 100;
+export const MIN_GRID_SIZE = 4;
+export const MAX_GRID_SIZE = 64;
 
 export const THEME_COLORS = {
   primary: '#FF7A00',

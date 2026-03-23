@@ -3,6 +3,8 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-orange-500: #FF7A00;
 }
 
 :root {
@@ -12,6 +14,13 @@
   --line: rgba(255, 255, 255, 0.1);
 }
 
+.theme-dark { --bg: #050505; --ink: #ffffff; --accent: #10b981; }
+.theme-light { --bg: #f5f5f5; --ink: #1a1a1a; --accent: #3b82f6; --line: rgba(0, 0, 0, 0.1); }
+.theme-royal-blue { --bg: #001f3f; --ink: #ffffff; --accent: #ff851b; }
+.theme-emerald-green { --bg: #064e3b; --ink: #ecfdf5; --accent: #fbbf24; }
+.theme-crimson-red { --bg: #450a0a; --ink: #fef2f2; --accent: #38bdf8; }
+.theme-violet-purple { --bg: #2e1065; --ink: #f5f3ff; --accent: #22c55e; }
+
 body {
   background-color: var(--bg);
   color: var(--ink);
@@ -19,6 +28,8 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .glass {
@@ -63,4 +74,15 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.grid-container {
+  width: 100%;
+  max-height: calc(100vh - 250px);
+  overflow: auto;
+  position: relative;
+}
+
+.grid-container > * {
+  margin: 0 auto;
 }

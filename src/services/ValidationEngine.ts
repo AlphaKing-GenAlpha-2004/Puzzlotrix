@@ -15,6 +15,25 @@ export class ValidationEngine {
       return { isValid: true, isComplete: true, isFull: true, conflicts: [], errors: [] };
     }
 
+    // Check if user solution matches AI solution as a shortcut
+    if (solution) {
+      let isMatch = false;
+      if (type === 'sudoku' || type === 'math-latin-square' || type === 'kenken') {
+        const grid = data.grid || data;
+        isMatch = this.isGridEqual(grid, solution);
+      } else if (type === 'n-queens') {
+        isMatch = JSON.stringify(data) === JSON.stringify(solution);
+      } else if (type === 'nonogram') {
+        isMatch = this.isGridEqual(data.userGrid, solution);
+      } else if (type === 'sliding-puzzle') {
+        isMatch = JSON.stringify(data.grid) === JSON.stringify(solution);
+      }
+
+      if (isMatch) {
+        return { isValid: true, isComplete: true, isFull: true, conflicts: [], errors: [] };
+      }
+    }
+
     // Clear previous errors implicitly by returning a new object
     let result: ValidationResult;
     switch (type) {
@@ -36,6 +55,9 @@ export class ValidationEngine {
       case 'nonogram':
         result = this.validateNonogram(size, data, solution);
         break;
+      case 'minesweeper':
+        result = this.validateMinesweeper(size, data);
+        break;
       case 'sliding-puzzle':
         result = this.validateSlidingPuzzle(size, data);
         break;
@@ -46,10 +68,49 @@ export class ValidationEngine {
     return result;
   }
 
+  private static validateMinesweeper(size: number, data: any): ValidationResult {
+    const { grid, revealed, flagged } = data;
+    if (!grid || !revealed) return { isValid: false, isComplete: false, isFull: false, conflicts: [], errors: ["Invalid data"] };
+
+    let unrevealedSafeCells = 0;
+    let hitMine = false;
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (grid[r][c] === -1 && revealed[r][c]) {
+          hitMine = true;
+        }
+        if (grid[r][c] !== -1 && !revealed[r][c]) {
+          unrevealedSafeCells++;
+        }
+      }
+    }
+
+    const isComplete = !hitMine && unrevealedSafeCells === 0;
+    return {
+      isValid: !hitMine,
+      isComplete,
+      isFull: revealed.every((row: any) => row.every((cell: any) => cell)), // Not really applicable for Minesweeper in the same way
+      conflicts: [],
+      errors: hitMine ? ["Hit a mine!"] : (unrevealedSafeCells > 0 ? ["Still safe cells to reveal."] : [])
+    };
+  }
+
+  private static isGridEqual(g1: any[][], g2: any[][]): boolean {
+    if (!g1 || !g2 || g1.length !== g2.length) return false;
+    for (let r = 0; r < g1.length; r++) {
+      if (!g1[r] || !g2[r] || g1[r].length !== g2[r].length) return false;
+      for (let c = 0; c < g1[r].length; c++) {
+        if (g1[r][c] !== g2[r][c]) return false;
+      }
+    }
+    return true;
+  }
+
   private static validateSlidingPuzzle(size: number, data: any): ValidationResult {
     const grid = data.grid;
-    const total = size * size;
-    let isFull = true;
+    if (!grid) return { isValid: false, isComplete: false, isFull: false, conflicts: [], errors: ["Grid data missing."] };
+    const total = grid.length;
     let isComplete = true;
 
     for (let i = 0; i < total - 1; i++) {
@@ -73,32 +134,52 @@ export class ValidationEngine {
     
     if (!solution) return { isValid: true, isComplete: false, isFull: false, conflicts: [], errors: [] };
 
-    let isFull = true;
     let hasMismatch = false;
+    let missingFilled = false;
 
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         const actual = userGrid[r][c] === 1 ? 1 : 0;
         const expected = solution[r][c];
-        if (userGrid[r][c] === 0) isFull = false;
+        
         if (actual !== expected) {
-          hasMismatch = true;
-          conflicts.push({ r, c });
+          // If the user filled a cell that should be empty, it's a mismatch
+          if (actual === 1 && expected === 0) {
+            hasMismatch = true;
+            conflicts.push({ r, c });
+          }
+          // If the user hasn't filled a cell that should be filled, it's incomplete
+          if (actual === 0 && expected === 1) {
+            missingFilled = true;
+          }
         }
       }
     }
 
     if (hasMismatch) {
-      errors.push("Some cells do not match the solution.");
+      errors.push("Some filled cells are incorrect.");
     }
 
     return {
       isValid: !hasMismatch,
-      isComplete: isFull && !hasMismatch,
-      isFull,
+      isComplete: !hasMismatch && !missingFilled,
+      isFull: !missingFilled, // In Nonogram, "full" means all required cells are filled
       conflicts,
       errors
     };
+  }
+
+  private static calculate(values: number[], operators: MathOp[]): number {
+    let res = values[0];
+    for (let i = 0; i < operators.length; i++) {
+      const op = operators[i];
+      const next = values[i + 1];
+      if (op === '+') res += next;
+      else if (op === '-') res -= next;
+      else if (op === '*') res *= next;
+      else if (op === '/') res /= next;
+    }
+    return res;
   }
 
   private static validateMathLatinSquare(size: number, data: MathLatinSquareData, solution?: any): ValidationResult {
@@ -113,49 +194,47 @@ export class ValidationEngine {
     conflicts.push(...lsResult.conflicts);
     errors.push(...lsResult.errors);
 
-    const calculate = (values: number[], operators: MathOp[]): number => {
-      let res = values[0];
-      for (let i = 0; i < operators.length; i++) {
-        const op = operators[i];
-        const next = values[i + 1];
-        if (op === '+') res += next;
-        else if (op === '-') res -= next;
-        else if (op === '*') res *= next;
-        else if (op === '/') res /= next;
-      }
-      return res;
-    };
-
     let isFull = true;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (grid[r]?.[c] === 0) isFull = false;
+        const val = grid[r]?.[c];
+        if (val === 0) isFull = false;
+        else if (val < 1 || val > size) {
+          conflicts.push({ r, c });
+          if (!errors.includes(`Value ${val} is out of range (1-${size})`)) {
+            errors.push(`Value ${val} is out of range (1-${size})`);
+          }
+        }
       }
     }
 
     // Row arithmetic
-    for (let r = 0; r < size; r++) {
-      const rowValues = grid[r];
-      if (rowValues.every(v => v !== 0)) {
-        const res = calculate(rowValues, data.rowOps[r]);
-        if (Math.abs(res - data.rowTargets[r]) > 0.001) {
-          for (let c = 0; c < size; c++) arithmeticConflicts.push({ r, c });
-          if (!errors.includes("Row arithmetic constraint violated.")) {
-            errors.push("Row arithmetic constraint violated.");
+    if (data.rowOps && data.rowTargets) {
+      for (let r = 0; r < size; r++) {
+        const rowValues = grid[r];
+        if (rowValues && rowValues.every(v => v !== 0)) {
+          const res = this.calculate(rowValues, data.rowOps[r]);
+          if (Math.abs(res - data.rowTargets[r]) > 0.001) {
+            for (let c = 0; c < size; c++) arithmeticConflicts.push({ r, c });
+            if (!errors.includes("Row arithmetic constraint violated.")) {
+              errors.push("Row arithmetic constraint violated.");
+            }
           }
         }
       }
     }
 
     // Column arithmetic
-    for (let c = 0; c < size; c++) {
-      const colValues = grid.map(row => row[c]);
-      if (colValues.every(v => v !== 0)) {
-        const res = calculate(colValues, data.colOps[c]);
-        if (Math.abs(res - data.colTargets[c]) > 0.001) {
-          for (let r = 0; r < size; r++) arithmeticConflicts.push({ r, c });
-          if (!errors.includes("Column arithmetic constraint violated.")) {
-            errors.push("Column arithmetic constraint violated.");
+    if (data.colOps && data.colTargets) {
+      for (let c = 0; c < size; c++) {
+        const colValues = grid.map(row => row[c]);
+        if (colValues.every(v => v !== 0)) {
+          const res = this.calculate(colValues, data.colOps[c]);
+          if (Math.abs(res - data.colTargets[c]) > 0.001) {
+            for (let r = 0; r < size; r++) arithmeticConflicts.push({ r, c });
+            if (!errors.includes("Column arithmetic constraint violated.")) {
+              errors.push("Column arithmetic constraint violated.");
+            }
           }
         }
       }
@@ -225,7 +304,14 @@ export class ValidationEngine {
     let isFull = true;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (grid[r]?.[c] === 0) isFull = false;
+        const val = grid[r]?.[c];
+        if (val === 0) isFull = false;
+        else if (val < 1 || val > size) {
+          conflicts.push({ r, c });
+          if (!errors.includes(`Value ${val} is out of range (1-${size})`)) {
+            errors.push(`Value ${val} is out of range (1-${size})`);
+          }
+        }
       }
     }
 
@@ -382,7 +468,7 @@ export class ValidationEngine {
   private static validateKenKen(size: number, data: any, solution?: any): ValidationResult {
     const grid = data?.grid || [];
     if (!grid || grid.length === 0) return { isValid: false, isComplete: false, isFull: false, conflicts: [], errors: ["Grid data missing."] };
-    const cages: KenKenCage[] = data.cages;
+    const cages: KenKenCage[] = data.cages || [];
     const conflicts: { r: number; c: number }[] = [];
     const errors: string[] = [];
 
@@ -394,7 +480,14 @@ export class ValidationEngine {
     let isFull = true;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (grid[r]?.[c] === 0) isFull = false;
+        const val = grid[r]?.[c];
+        if (val === 0) isFull = false;
+        else if (val < 1 || val > size) {
+          conflicts.push({ r, c });
+          if (!errors.includes(`Value ${val} is out of range (1-${size})`)) {
+            errors.push(`Value ${val} is out of range (1-${size})`);
+          }
+        }
       }
     }
 
@@ -420,7 +513,7 @@ export class ValidationEngine {
         }
 
         if (Math.abs(result - target) > 0.001) {
-          cage.cells.forEach(cell => conflicts.push(cell));
+          cage.cells.forEach(cell => conflicts.push({ r: cell.r, c: cell.c }));
           if (!errors.includes("Cage arithmetic constraint not satisfied.")) {
             errors.push("Cage arithmetic constraint not satisfied.");
           }

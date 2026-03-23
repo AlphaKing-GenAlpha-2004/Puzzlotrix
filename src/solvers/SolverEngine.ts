@@ -2,6 +2,7 @@ import { PuzzleType, AlgorithmType, WorkerRequest, WorkerResponse, SolveStats } 
 
 export interface SolverResult {
   solution: any;
+  message?: string;
   stats: SolveStats;
   visited?: { r: number; c: number }[];
   frontier?: { r: number; c: number }[];
@@ -27,6 +28,7 @@ export class SolverEngine {
         } else {
           resolve({
             solution: e.data.solution,
+            message: e.data.message,
             stats: e.data.stats,
             visited: e.data.visited,
             frontier: e.data.frontier
@@ -36,7 +38,16 @@ export class SolverEngine {
 
       this.worker?.addEventListener('message', handler);
       
-      const request: WorkerRequest = { type, algorithm, data, size, rows, cols };
+      const request: WorkerRequest = { 
+        type: 'solve' as any, 
+        puzzleType: type, 
+        algorithm, 
+        data, 
+        size, 
+        rows, 
+        cols,
+        difficulty: 'medium' // Default difficulty if not provided
+      };
       this.worker?.postMessage(request);
     });
   }

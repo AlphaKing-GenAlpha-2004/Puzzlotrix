@@ -147,6 +147,26 @@ export const algorithmExplanations: AlgorithmExplanation[] = [
     complexity: 'Time: O(E + V log V), Space: O(V).',
     educational: 'The foundation of modern routing and network optimization.'
   },
+  {
+    id: 'dead-end-filling',
+    name: 'Dead-End Filling',
+    category: 'Pathfinding & Search',
+    overview: 'A maze-solving technique that identifies and fills in dead-end corridors until only the solution path remains.',
+    purpose: 'Used as a pre-processing step for Mazes to simplify the search space before running more complex algorithms.',
+    keyIdea: 'If a cell (other than the start or end) is connected to only one other cell, it must be a dead end and cannot be part of the solution.',
+    steps: [
+      'Scan the maze for any cell that has exactly one neighbor (a dead end).',
+      'Ensure the cell is not the Start or End point.',
+      'Fill the cell by turning it into a wall.',
+      'Repeat the process for the neighbor of the filled cell, as it might now also be a dead end.',
+      'Continue until no more dead ends can be found.'
+    ],
+    example: 'In a simple T-junction where one branch leads to a wall, the algorithm fills that branch back to the junction.',
+    advantages: 'Extremely fast and simplifies the maze significantly, often leaving only the solution path.',
+    limitations: 'Only works for "perfect" mazes (no loops); in mazes with cycles, it won\'t find the shortest path if multiple exist.',
+    complexity: 'Time: O(V), Space: O(1) or O(V).',
+    educational: 'Demonstrates the power of "reduction" – solving a problem by removing what is definitely NOT the answer.'
+  },
 
   // CONSTRAINT SATISFACTION
   {

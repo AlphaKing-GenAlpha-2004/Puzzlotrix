@@ -3,12 +3,101 @@ export type PuzzleType =
   | 'nonogram' 
   | 'minesweeper' 
   | 'maze' 
-  | 'nqueens' 
-  | 'sliding' 
+  | 'n-queens' 
+  | 'sliding-puzzle' 
   | 'math-latin-square' 
   | 'kenken';
 
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';
+
+export type ThemeType = 'classic' | 'modern' | 'cyber' | 'minimal' | 'dark';
+
+export type AlgorithmType = 
+  | 'backtracking' 
+  | 'backtracking-mrv'
+  | 'forward-checking'
+  | 'ac3'
+  | 'astar' 
+  | 'astar-manhattan'
+  | 'astar-weighted'
+  | 'astar-hamming'
+  | 'idastar'
+  | 'bfs' 
+  | 'dfs' 
+  | 'dijkstra' 
+  | 'greedy' 
+  | 'logic' 
+  | 'logical-deduction'
+  | 'probabilistic'
+  | 'hybrid'
+  | 'constructive'
+  | 'constraint-propagation';
+
+export type MazeGenAlgorithm = 'prim' | 'kruskal' | 'recursive-dfs' | 'eller' | 'binary-tree' | 'dfs';
+
+export type MathOp = '+' | '-' | '*' | '/';
+export type KenKenOp = MathOp | 'none';
+
+export interface MathLatinSquareData {
+  rowTargets: number[];
+  colTargets: number[];
+  rowOps: MathOp[][];
+  colOps: MathOp[][];
+  solution?: any[][];
+  grid?: any[][];
+}
+
+export interface KenKenCage {
+  id: number;
+  target: number;
+  op: MathOp | '';
+  cells: { r: number; c: number }[];
+}
+
+export interface KenKenData {
+  cages: KenKenCage[];
+  grid?: any[][];
+  solution?: any[][];
+}
+
+export interface MazeData {
+  grid: number[][];
+  start: { r: number; c: number };
+  end: { r: number; c: number };
+  carvedCount?: number;
+}
+
+export interface NonogramData {
+  rowClues: number[][];
+  colClues: number[][];
+  solution?: any[][];
+  userGrid?: any[][];
+}
+
+export interface SolveStats {
+  nodesExplored: number;
+  nodesExpanded?: number;
+  timeTaken: number;
+  timeMs?: number;
+  backtracks: number;
+}
+
+export interface SolverConfig {
+  algorithm: AlgorithmType;
+  genAlgorithm?: MazeGenAlgorithm;
+  delay?: number;
+  speed?: number;
+  instant?: boolean;
+  useHeuristics?: boolean;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  isComplete: boolean;
+  isFull: boolean;
+  conflicts: { r: number; c: number }[];
+  errors: string[];
+}
 
 export interface PuzzleState {
   type: PuzzleType;
@@ -16,12 +105,43 @@ export interface PuzzleState {
   difficulty: Difficulty;
   grid: any[][];
   initialGrid: any[][];
-  solution: any[][];
+  initialData?: any;
+  solution?: any[][] | null;
+  data?: any;
+  rows?: number;
+  cols?: number;
+  moves?: number;
+  undoStack?: any[][][];
+  actualSeed?: number;
+  solveStats?: SolveStats;
+  generationId?: string | number;
   clues?: any;
   startTime: number;
   isSolved: boolean;
+  isRevealed?: boolean;
+  isAISolved?: boolean;
   errors: { r: number; c: number }[];
-  seed: string;
+  seed: number | null;
+}
+
+export interface WorkerRequest {
+  type: 'solve' | 'generate' | PuzzleType;
+  puzzleType: PuzzleType;
+  size: number;
+  difficulty: Difficulty;
+  data?: any;
+  config?: SolverConfig;
+  seed?: string;
+  rows?: number;
+  cols?: number;
+  algorithm?: AlgorithmType | MazeGenAlgorithm;
+}
+
+export interface WorkerResponse {
+  type: 'success' | 'error' | 'progress';
+  result?: any;
+  stats?: SolveStats;
+  error?: string;
 }
 
 export interface LeaderboardEntry {

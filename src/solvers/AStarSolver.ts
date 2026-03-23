@@ -1,5 +1,6 @@
 export interface SolverResult {
   solution: any;
+  message?: string;
   visited?: { r: number; c: number }[];
   frontier?: { r: number; c: number }[];
   stats: {
@@ -127,7 +128,6 @@ export class AStarSolver {
   static solveSliding(grid1D: number[], rows: number, cols: number, algorithm: string = 'astar-manhattan'): SolverResult {
     const startTime = performance.now();
     const total = grid1D.length;
-    const MAX_NODES = 2000000;
     const MAX_TIME = 30000; // 30s
     
     const startFlat = [...grid1D];
@@ -140,6 +140,10 @@ export class AStarSolver {
       const val = targetFlat[i];
       targetPos[val] = { r: Math.floor(i / cols), c: i % cols };
     }
+
+    const isGreedy = algorithm === 'greedy';
+    const isWeighted = algorithm === 'astar-weighted' || (total > 16 && !isGreedy);
+    const weight = isWeighted ? (total > 25 ? 4.0 : 2.0) : 1.0;
 
     const manhattan = (flat: number[]): number => {
       let dist = 0;
@@ -164,14 +168,14 @@ export class AStarSolver {
     const getH = (flat: number[]) => algorithm === 'astar-hamming' ? hamming(flat) : manhattan(flat);
 
     const getStateKey = (flat: number[]): bigint | string => {
-      if (total <= 16) {
+      if (total <= 36) {
         let key = 0n;
         for (let i = 0; i < total; i++) {
-          key = (key << 4n) | BigInt(flat[i]);
+          key = (key << 6n) | BigInt(flat[i]);
         }
         return key;
       }
-      return String.fromCharCode(...flat);
+      return flat.join(',');
     };
 
     const pq = new PriorityQueue<{ flat: number[]; g: number; f: number; h: number; emptyIdx: number; key: bigint | string; parent?: any }>();
@@ -181,10 +185,11 @@ export class AStarSolver {
     const startH = getH(startFlat);
     const startKey = getStateKey(startFlat);
     const targetKey = getStateKey(targetFlat);
-    pq.push({ flat: startFlat, g: 0, f: startH, h: startH, emptyIdx: startEmptyIdx, key: startKey }, startH);
+    pq.push({ flat: startFlat, g: 0, f: isGreedy ? startH : weight * startH, h: startH, emptyIdx: startEmptyIdx, key: startKey }, isGreedy ? startH : weight * startH);
     
     let iterations = 0;
     let nodesExpanded = 0;
+    const MAX_NODES = total > 25 ? 300000 : 2000000;
     
     while (pq.size() > 0) {
       iterations++;
@@ -192,22 +197,6 @@ export class AStarSolver {
       const current = pq.pop()!;
       const currentKey = current.key;
 
-      // Performance safety
-      if (nodesExpanded > MAX_NODES) {
-        throw new Error("Search Space Too Large for Exact Solve. Try a smaller grid or a different algorithm.");
-      }
-      if (performance.now() - startTime > MAX_TIME) {
-        throw new Error(`Solver timed out (${MAX_TIME/1000}s limit exceeded)`);
-      }
-
-      // Check if we already found a better path to this state
-      if (closedSet.has(currentKey) && closedSet.get(currentKey)! <= current.g) {
-        continue;
-      }
-      
-      nodesExpanded++;
-      closedSet.set(currentKey, current.g);
-      
       if (currentKey === targetKey) {
         const path: number[][] = [];
         let temp: any = current;
@@ -220,6 +209,22 @@ export class AStarSolver {
           stats: { timeMs: performance.now() - startTime, steps: path.length - 1, iterations, depth: current.g, nodesExpanded }
         };
       }
+
+      // Performance safety
+      if (nodesExpanded > MAX_NODES) {
+        throw new Error(`Search space exceeded (${MAX_NODES} nodes). Try a smaller grid or a simpler algorithm.`);
+      }
+      if (performance.now() - startTime > MAX_TIME) {
+        throw new Error(`Solver timed out (${MAX_TIME/1000}s limit exceeded)`);
+      }
+
+      // Check if we already found a better path to this state
+      if (closedSet.has(currentKey) && closedSet.get(currentKey)! <= current.g) {
+        continue;
+      }
+      
+      nodesExpanded++;
+      closedSet.set(currentKey, current.g);
       
       const r = Math.floor(current.emptyIdx / cols);
       const c = current.emptyIdx % cols;
@@ -252,7 +257,7 @@ export class AStarSolver {
           nextH = getH(nextFlat);
         }
 
-        const f = algorithm === 'greedy' ? nextH : g + nextH;
+        const f = isGreedy ? nextH : g + weight * nextH;
         pq.push({ flat: nextFlat, g, f, h: nextH, emptyIdx: nextIdx, key: nextKey, parent: current }, f);
       }
     }

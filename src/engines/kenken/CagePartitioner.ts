@@ -9,7 +9,7 @@ export class CagePartitioner {
       for (let c = 0; c < size; c++) {
         if (visited[r][c]) continue;
         
-        const cageSize = rng.nextInt(1, size > 10 ? 3 : 4);
+        const cageSize = rng.nextInt(1, size > 6 ? 3 : 2); // Smaller cages for better logic
         const cageCells: { r: number; c: number }[] = [{ r, c }];
         visited[r][c] = true;
         

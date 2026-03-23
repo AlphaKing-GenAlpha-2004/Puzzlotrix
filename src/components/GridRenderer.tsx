@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PuzzleType } from '../types';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ValidationResult } from '../services/ValidationEngine';
+import { Maximize2, Minimize2 } from 'lucide-react';
 
 interface GridRendererProps {
   type: PuzzleType;
@@ -21,6 +22,7 @@ export const GridRenderer: React.FC<GridRendererProps> = ({
   type, size, rows, cols, data, solution, isSolved, onCellClick, selectedCell, validation, onKeyDown
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isMaximized, setIsMaximized] = useState(false);
   const actualRows = rows || size;
   const actualCols = cols || size;
 
@@ -122,37 +124,78 @@ export const GridRenderer: React.FC<GridRendererProps> = ({
     }
   };
 
+  const toggleMaximize = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsMaximized(!isMaximized);
+  };
+
+  const renderMaximizeButton = () => (
+    <button 
+      onClick={toggleMaximize}
+      className={`absolute top-2 right-2 z-[110] p-1.5 rounded-lg bg-black/40 hover:bg-black/60 text-white/70 hover:text-white transition-all border border-white/10`}
+      title={isMaximized ? "Minimize" : "Maximize"}
+    >
+      {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+    </button>
+  );
+
+  const containerClasses = isMaximized 
+    ? "fixed inset-0 z-[100] bg-[#1E1E1E]/95 backdrop-blur-md p-4 md:p-12 flex flex-col items-center justify-center overflow-auto"
+    : "relative w-full h-full";
+
   if (type === 'nonogram') {
-    return renderNonogram(actualRows, actualCols, data, solution, isSolved, onCellClick);
+    return (
+      <div className={containerClasses}>
+        {renderMaximizeButton()}
+        <div className={`grid-container bg-[#2A2A2A] rounded-2xl border border-white/10 p-4 ${isMaximized ? 'max-w-full max-h-full' : ''}`}>
+          {renderNonogram(actualRows, actualCols, data, solution, isSolved, onCellClick)}
+        </div>
+      </div>
+    );
   }
 
   if (type === 'math-latin-square') {
-    return renderMathLatinSquare(size, data, solution, isSolved, onCellClick, selectedCell, validation, onKeyDown);
+    return (
+      <div className={containerClasses}>
+        {renderMaximizeButton()}
+        <div className={`grid-container bg-[#2A2A2A] rounded-2xl border border-white/10 p-4 ${isMaximized ? 'max-w-full max-h-full' : ''}`}>
+          {renderMathLatinSquare(size, data, solution, isSolved, onCellClick, selectedCell, validation, onKeyDown)}
+        </div>
+      </div>
+    );
   }
 
   if (size > 50 || actualRows > 50 || actualCols > 50) {
     return (
-      <div className="relative w-full aspect-square max-w-[600px] bg-black/10 rounded-xl overflow-hidden border border-white/10">
-        <canvas ref={canvasRef} className="w-full h-full" />
-        <div className="absolute bottom-2 right-2 text-[10px] opacity-50 font-mono">Canvas Rendering Mode ({actualRows}x{actualCols})</div>
+      <div className={containerClasses}>
+        {renderMaximizeButton()}
+        <div className={`grid-container bg-black/10 rounded-xl overflow-hidden border border-white/10 relative ${isMaximized ? 'w-[90vw] h-[85vh]' : ''}`}>
+          <canvas ref={canvasRef} className="w-full h-full" />
+          <div className="absolute bottom-2 right-2 text-[10px] opacity-50 font-mono">Canvas Rendering Mode ({actualRows}x{actualCols})</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div 
-      className="grid bg-[#1E1E1E] p-2 rounded-xl border border-white/10 shadow-inner outline-none focus:ring-2 focus:ring-[#FF7A00]/50"
-      tabIndex={0}
-      onKeyDown={onKeyDown}
-      style={{
-        gridTemplateColumns: `repeat(${actualCols}, 1fr)`,
-        gridTemplateRows: `repeat(${actualRows}, 1fr)`,
-        width: '100%',
-        maxWidth: '600px',
-        aspectRatio: `${actualCols}/${actualRows}`
-      }}
-    >
-      {renderDOMGrid(type, size, actualRows, actualCols, data, solution, isSolved, onCellClick, selectedCell, validation)}
+    <div className={containerClasses}>
+      {renderMaximizeButton()}
+      <div className="grid-container">
+        <div 
+          className="grid bg-[#1E1E1E] p-2 rounded-xl border border-white/10 shadow-inner outline-none focus:ring-2 focus:ring-[#FF7A00]/50"
+          tabIndex={0}
+          onKeyDown={onKeyDown}
+          style={{
+            gridTemplateColumns: `repeat(${actualCols}, 1fr)`,
+            gridTemplateRows: `repeat(${actualRows}, 1fr)`,
+            width: '100%',
+            maxWidth: isMaximized ? '90vh' : '600px',
+            aspectRatio: `${actualCols}/${actualRows}`
+          }}
+        >
+          {renderDOMGrid(type, size, actualRows, actualCols, data, solution, isSolved, onCellClick, selectedCell, validation)}
+        </div>
+      </div>
     </div>
   );
 };
@@ -242,7 +285,7 @@ const renderMathLatinSquare = (
   }
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full max-w-full overflow-auto p-6 bg-[#2A2A2A] rounded-2xl border border-white/10">
+    <div className="flex flex-col items-center gap-4 w-full">
        <div className="flex justify-around w-full px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-[#FF7A00] font-mono text-xl mb-4">
           <span>∑</span>
           <span className="text-xs opacity-50 uppercase tracking-widest self-center text-[#EAEAEA]">Arithmetic Latin Square</span>
@@ -264,14 +307,15 @@ const renderMathLatinSquare = (
 };
 
 const renderNonogram = (rows: number, cols: number, data: any, solution: any, isSolved: boolean, onCellClick?: (r: number, c: number, e?: React.MouseEvent) => void) => {
-  const { rowClues, colClues, userGrid } = data;
+  const { userGrid, clues } = data;
+  const { rowClues, colClues } = clues;
   const displayGrid = isSolved ? solution : userGrid;
   
   return (
-    <div className="flex flex-col items-center gap-2 max-w-full overflow-auto p-4 bg-[#2A2A2A] rounded-2xl border border-white/10">
-      <div className="flex">
+    <div className="relative" style={{ width: 'fit-content', height: 'fit-content' }}>
+      <div className="flex sticky top-0 z-30 bg-[#2A2A2A]">
         {/* Corner spacer */}
-        <div className="w-16 md:w-24 shrink-0" />
+        <div className="w-16 md:w-24 shrink-0 sticky left-0 z-40 bg-[#2A2A2A]" />
         {/* Column Clues */}
         <div className="flex" style={{ width: 'fit-content' }}>
           {colClues.map((clue: number[], i: number) => (
@@ -286,7 +330,7 @@ const renderNonogram = (rows: number, cols: number, data: any, solution: any, is
       
       <div className="flex">
         {/* Row Clues */}
-        <div className="flex flex-col shrink-0">
+        <div className="flex flex-col shrink-0 sticky left-0 z-20 bg-[#2A2A2A]">
           {rowClues.map((clue: number[], i: number) => (
             <div key={i} className="h-6 md:h-8 flex justify-end items-center border-y border-white/10 bg-white/5 px-2 w-16 md:w-24">
               {clue.map((c, j) => (

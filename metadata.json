@@ -1,5 +1,5 @@
 {
-  "name": "Puzzlotrix-Interactive AI Puzzle Solver",
-  "description": "A scalable, modular puzzle platform featuring deterministic seed-based generation, dynamic grid sizes (3-500), and AI self-solving engines for multiple puzzle types.",
+  "name": "Puzzlotrix",
+  "description": "A high-performance puzzle platform with deterministic generation, dynamic grid sizes (up to 64x64), and advanced AI solvers for Sudoku, Mazes, N-Queens, and more.",
   "requestFramePermissions": []
 }

@@ -41,8 +41,8 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({
       />
       <StatItem label={stateSpaceLabel} value={formatStateSpace(stateSpace)} />
       <StatItem label="Gen Time" value={`${genTime.toFixed(2)}ms`} />
-      <StatItem label="Solve Time" value={solveStats ? `${solveStats.timeMs.toFixed(2)}ms` : '—'} />
-      <StatItem label="Nodes Expanded" value={solveStats ? solveStats.nodesExpanded.toLocaleString() : '—'} />
+      <StatItem label="Solve Time" value={solveStats?.timeMs !== undefined ? `${solveStats.timeMs.toFixed(2)}ms` : '—'} />
+      <StatItem label="Nodes Expanded" value={solveStats?.nodesExpanded !== undefined ? solveStats.nodesExpanded.toLocaleString() : '—'} />
       <StatItem label="Moves" value={moves?.toString() || '0'} />
       <div className="flex flex-col relative group">
         <span className="text-[10px] font-bold uppercase tracking-widest text-[#FF7A00] opacity-80">Timer</span>

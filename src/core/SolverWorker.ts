@@ -12,8 +12,8 @@ import { KenKenSolver } from '../solvers/KenKenSolver';
 import { MazeSolvers } from '../solvers/MazeSolvers';
 
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
-  const { type, algorithm, data, size, rows, cols } = e.data;
-  if (!data && type !== 'n-queens') {
+  const { type, puzzleType, algorithm, data, size, rows, cols } = e.data;
+  if (!data && puzzleType !== 'n-queens') {
     self.postMessage({ error: "Missing puzzle data" });
     return;
   }
@@ -21,7 +21,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
 
   try {
     const solvePromise = (async () => {
-      switch (type) {
+      switch (puzzleType) {
         case 'maze':
           if (algorithm === 'bfs') return BFSSolver.solveMaze(data.grid, data.start, data.end);
           else if (algorithm === 'dfs') return DFSSolver.solveMaze(data.grid, data.start, data.end);
@@ -49,12 +49,12 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         case 'kenken':
           return KenKenSolver.solve(data);
         default:
-          throw new Error(`Unsupported puzzle type: ${type}`);
+          throw new Error(`Unsupported puzzle type: ${puzzleType}`);
       }
     })();
 
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Solving timed out (30s limit exceeded)")), 30000)
+      setTimeout(() => reject(new Error("Solving timed out (60s limit exceeded)")), 60000)
     );
 
     result = await Promise.race([solvePromise, timeoutPromise]);

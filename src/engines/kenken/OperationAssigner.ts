@@ -32,6 +32,11 @@ export class OperationAssigner {
       else target = values.reduce((a, b) => a * b, 1);
     }
 
-    return { cells, target, op };
+    return { 
+      id: rng.nextInt(0, 1000000),
+      cells: cells, 
+      target, 
+      op: op === 'none' ? '' : op 
+    };
   }
 }

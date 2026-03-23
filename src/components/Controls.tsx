@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { PuzzleType, ThemeType, AlgorithmType, SolverConfig } from '../types';
-import { RefreshCw, Play, Shuffle, X, Settings2, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, Play, Shuffle, X, Settings2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getAlgorithmsForPuzzle, MAZE_GEN_ALGORITHMS } from '../core/AlgorithmRegistry';
 import { MIN_GRID_SIZE, MAX_GRID_SIZE, THEME_COLORS } from '../constants';
+import { Validator } from '../core/Validator';
+import { SolutionValidator } from '../core/SolutionValidator';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ControlsProps {
   puzzleType: PuzzleType;
@@ -26,6 +29,10 @@ interface ControlsProps {
   onReveal: () => void;
   onReset: () => void;
   isSolving: boolean;
+  currentGrid?: any;
+  puzzleData?: any;
+  leaderboard?: any[];
+  puzzle?: any;
 }
 
 export const Controls: React.FC<ControlsProps> = ({
@@ -37,9 +44,25 @@ export const Controls: React.FC<ControlsProps> = ({
   theme, setTheme,
   solverConfig, setSolverConfig,
   onGenerate, onSolve, onCancel, onCheck, onReveal, onReset,
-  isSolving
+  isSolving,
+  currentGrid,
+  puzzleData,
+  leaderboard = [],
+  puzzle
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [validationResult, setValidationResult] = useState<any>(null);
+
+  const handleCheck = () => {
+    if (!currentGrid) return;
+    const result = SolutionValidator.validate(puzzleType, currentGrid, puzzleData);
+    setValidationResult(result);
+    onCheck();
+  };
+
+  const solveValidation = Validator.canSolve(puzzleType, gridSize, rows, cols);
+  const generateValidation = Validator.canGenerate(puzzleType, gridSize);
 
   const puzzleTypes: { value: PuzzleType; label: string }[] = [
     { value: 'math-latin-square', label: 'Math Latin Square' },
@@ -192,14 +215,14 @@ export const Controls: React.FC<ControlsProps> = ({
             <div className="flex gap-4 items-center">
               <input
                 type="range"
-                min={MIN_GRID_SIZE}
-                max={puzzleType === 'sudoku' ? 49 : MAX_GRID_SIZE}
+                min={puzzleType === 'n-queens' ? 4 : MIN_GRID_SIZE}
+                max={puzzleType === 'sudoku' ? 64 : MAX_GRID_SIZE}
                 value={gridSize}
                 disabled={isSolving}
                 onChange={(e) => {
                   let val = parseInt(e.target.value);
                   if (puzzleType === 'sudoku') {
-                    val = Math.min(49, val);
+                    val = Math.min(64, val);
                     const root = Math.sqrt(val);
                     if (!Number.isInteger(root)) {
                       const nearestRoot = Math.round(root);
@@ -212,14 +235,15 @@ export const Controls: React.FC<ControlsProps> = ({
               />
               <input 
                 type="number"
-                min={MIN_GRID_SIZE}
-                max={puzzleType === 'sudoku' ? 49 : MAX_GRID_SIZE}
+                min={puzzleType === 'n-queens' ? 4 : MIN_GRID_SIZE}
+                max={puzzleType === 'sudoku' ? 64 : MAX_GRID_SIZE}
                 value={gridSize}
                 disabled={isSolving}
                 onChange={(e) => {
-                  const maxLimit = puzzleType === 'sudoku' ? 49 : MAX_GRID_SIZE;
-                  let val = parseInt(e.target.value) || MIN_GRID_SIZE;
-                  val = Math.max(MIN_GRID_SIZE, Math.min(maxLimit, val));
+                  const maxLimit = puzzleType === 'sudoku' ? 64 : MAX_GRID_SIZE;
+                  const minLimit = puzzleType === 'n-queens' ? 4 : MIN_GRID_SIZE;
+                  let val = parseInt(e.target.value) || minLimit;
+                  val = Math.max(minLimit, Math.min(maxLimit, val));
                   
                   if (puzzleType === 'sudoku') {
                     const root = Math.sqrt(val);
@@ -234,6 +258,9 @@ export const Controls: React.FC<ControlsProps> = ({
                 className="w-16 bg-black/40 border border-white/10 rounded-lg p-1 text-center text-xs outline-none focus:border-[#FF7A00] disabled:opacity-50"
               />
             </div>
+            {!generateValidation.valid && (
+              <p className="text-[10px] text-amber-400 mt-1 font-bold italic">{generateValidation.message}</p>
+            )}
           </div>
         )}
 
@@ -342,28 +369,102 @@ export const Controls: React.FC<ControlsProps> = ({
         ) : (
           <button
             onClick={onSolve}
-            className="flex-1 flex items-center justify-center gap-2 bg-[#22C55E] hover:bg-[#2DD4BF] text-white font-bold py-3 rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-900/20 text-sm"
+            disabled={!solveValidation.valid}
+            className="flex-1 flex items-center justify-center gap-2 bg-[#22C55E] hover:bg-[#2DD4BF] disabled:bg-neutral-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-900/20 text-sm relative group"
           >
             <Play size={16} />
             AI Solve
+            {!solveValidation.valid && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-black text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-48 text-center z-50">
+                {solveValidation.message}
+              </div>
+            )}
           </button>
         )}
       </div>
 
+      <AnimatePresence>
+        {validationResult && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className={`p-4 rounded-xl border ${
+              validationResult.isCorrect 
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                {validationResult.isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                <span className="font-bold text-xs uppercase tracking-wider">{validationResult.isCorrect ? 'Correct!' : 'Incorrect'}</span>
+              </div>
+              <button onClick={() => setValidationResult(null)} className="opacity-50 hover:opacity-100">
+                <X size={12} />
+              </button>
+            </div>
+            {validationResult.errors.length > 0 && (
+              <p className="text-[10px] opacity-80 leading-tight">{validationResult.errors[0]}</p>
+            )}
+            {validationResult.isCorrect && validationResult.completionTime && (
+              <p className="text-[10px] opacity-80 mt-1">Solved in {Math.round(validationResult.completionTime / 1000)}s</p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {['nonogram', 'kenken', 'sudoku', 'math-latin-square', 'n-queens', 'maze', 'minesweeper', 'sliding-puzzle'].includes(puzzleType) && !isSolving && (
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={handleCheck}
+              className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-xl transition-all active:scale-95 text-xs"
+            >
+              Check Solution
+            </button>
+            <button
+              onClick={onReveal}
+              className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded-xl transition-all active:scale-95 text-xs"
+            >
+              Reveal Solution
+            </button>
+          </div>
+          
           <button
-            onClick={onCheck}
-            className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-xl transition-all active:scale-95 text-xs"
+            onClick={() => setShowLeaderboard(!showLeaderboard)}
+            className="w-full bg-white/5 hover:bg-white/10 text-[#EAEAEA] font-bold py-2 rounded-xl transition-all text-[10px] uppercase tracking-widest border border-white/5"
           >
-            Check Solution
+            {showLeaderboard ? 'Hide Leaderboard' : 'Show Leaderboard'}
           </button>
-          <button
-            onClick={onReveal}
-            className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded-xl transition-all active:scale-95 text-xs"
-          >
-            Reveal Solution
-          </button>
+
+          <AnimatePresence>
+            {showLeaderboard && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="bg-black/40 rounded-xl p-3 border border-white/5 space-y-2 overflow-hidden"
+              >
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#FF7A00] mb-2">Top Solvers ({puzzleType} {gridSize}x{gridSize})</h3>
+                {leaderboard.length > 0 ? (
+                  <div className="space-y-1">
+                    {leaderboard.map((entry, i) => (
+                      <div key={i} className="flex justify-between items-center text-[10px] font-mono p-1.5 rounded bg-white/5 border border-white/5">
+                        <div className="flex items-center gap-2">
+                          <span className="opacity-40">{i + 1}.</span>
+                          <span className="font-bold">{entry.username}</span>
+                        </div>
+                        <span className="text-[#22C55E]">{Math.round(entry.solveTime)}s</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] opacity-40 italic text-center py-2">No scores yet. Be the first!</p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </div>

@@ -9,14 +9,17 @@ export class BacktrackingSolver {
     const board = grid.map(row => [...row]);
     let iterations = 0;
     let nodesExpanded = 0;
+    const MAX_DEPTH = 2000;
     
     const solve = (depth: number = 0): boolean => {
       iterations++;
       nodesExpanded++;
       
-      // Abort if timeout exceeded (30 seconds) or iteration limit
+      if (depth > MAX_DEPTH) return false;
+      
+      // Abort if timeout exceeded (60 seconds) or iteration limit
       if (iterations % 1000 === 0) {
-        if (performance.now() - startTime > 30000) return false;
+        if (performance.now() - startTime > 60000) return false;
       }
       if (iterations > 2000000) return false;
 
@@ -43,30 +46,32 @@ export class BacktrackingSolver {
 
   static solveNQueens(size: number, algorithm: string = 'backtracking'): SolverResult {
     const startTime = performance.now();
-    if (algorithm === 'constructive') {
+    if (algorithm === 'constructive' || size > 100) {
       return this.solveNQueensConstructive(size, startTime);
     }
     
     const board = Array(size).fill(-1);
     let iterations = 0;
     let nodesExpanded = 0;
+    const MAX_DEPTH = 2000;
     
-    const solve = (col: number): boolean => {
+    const solve = (col: number, depth: number): boolean => {
       iterations++;
       nodesExpanded++;
       if (col === size) return true;
+      if (depth > MAX_DEPTH) return false;
       
       for (let row = 0; row < size; row++) {
         if (this.isSafe(board, row, col)) {
           board[col] = row;
-          if (solve(col + 1)) return true;
+          if (solve(col + 1, depth + 1)) return true;
           board[col] = -1;
         }
       }
       return false;
     };
     
-    const success = solve(0);
+    const success = solve(0, 0);
     return {
       solution: success ? board : null,
       stats: { timeMs: performance.now() - startTime, steps: 0, iterations, depth: 0, nodesExpanded }
@@ -136,9 +141,10 @@ export class BacktrackingSolver {
 
   static solveMathLatinSquare(data: MathLatinSquareData, algorithm: string = 'backtracking'): SolverResult {
     const startTime = performance.now();
-    const size = data?.grid?.length || 0;
-    if (size === 0 || !data.grid[0]) return { solution: null, stats: { timeMs: performance.now() - startTime, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
-    const board = data.grid.map(row => [...row]);
+    const grid = data?.grid || [];
+    const size = grid.length || 0;
+    if (size === 0 || !grid[0]) return { solution: null, stats: { timeMs: performance.now() - startTime, steps: 0, iterations: 0, depth: 0, nodesExpanded: 0 } };
+    const board = grid.map(row => [...row]);
     let iterations = 0;
     let nodesExpanded = 0;
 
@@ -157,15 +163,17 @@ export class BacktrackingSolver {
 
     const isArithmeticValid = (r: number, c: number): boolean => {
       // Check row if full
-      if (board[r].every(v => v !== 0)) {
+      if (data.rowOps && data.rowTargets && board[r].every(v => v !== 0)) {
         const res = calculate(board[r], data.rowOps[r]);
         if (Math.abs(res - data.rowTargets[r]) > 0.001) return false;
       }
       // Check column if full
-      const colValues = board.map(row => row[c]);
-      if (colValues.every(v => v !== 0)) {
-        const res = calculate(colValues, data.colOps[c]);
-        if (Math.abs(res - data.colTargets[c]) > 0.001) return false;
+      if (data.colOps && data.colTargets) {
+        const colValues = board.map(row => row[c]);
+        if (colValues.every(v => v !== 0)) {
+          const res = calculate(colValues, data.colOps[c]);
+          if (Math.abs(res - data.colTargets[c]) > 0.001) return false;
+        }
       }
       return true;
     };
@@ -175,7 +183,7 @@ export class BacktrackingSolver {
       nodesExpanded++;
       
       if (iterations % 1000 === 0) {
-        if (performance.now() - startTime > 30000) return false;
+        if (performance.now() - startTime > 60000) return false;
       }
       if (iterations > 1000000) return false;
 
@@ -234,23 +242,27 @@ export class BacktrackingSolver {
   private static getOptions(board: number[][], r: number, c: number): number[] {
     const size = board.length;
     const n = Math.sqrt(size);
-    const used = new Set<number>();
+    const used = new Array(size + 1).fill(false);
+    
     for (let i = 0; i < size; i++) {
-      used.add(board[r][i]);
-      used.add(board[i][c]);
+      if (board[r][i] !== 0) used[board[r][i]] = true;
+      if (board[i][c] !== 0) used[board[i][c]] = true;
     }
+    
     if (Number.isInteger(n)) {
       const br = Math.floor(r / n) * n;
       const bc = Math.floor(c / n) * n;
       for (let i = 0; i < n; i++) {
         for (let j = 0; j < n; j++) {
-          used.add(board[br + i][bc + j]);
+          const val = board[br + i][bc + j];
+          if (val !== 0) used[val] = true;
         }
       }
     }
+    
     const options = [];
     for (let v = 1; v <= size; v++) {
-      if (!used.has(v)) options.push(v);
+      if (!used[v]) options.push(v);
     }
     return options;
   }

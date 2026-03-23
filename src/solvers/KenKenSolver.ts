@@ -3,7 +3,7 @@ import { SolverResult } from './AStarSolver';
 export class KenKenSolver {
   static solve(data: any): SolverResult {
     const startTime = performance.now();
-    const { solution, cages, grid } = data;
+    const { solution, cages = [], grid } = data;
     
     // If solution is provided in data, return it for AI Solve
     if (solution) {
@@ -50,25 +50,27 @@ export class KenKenSolver {
     };
 
     let iterations = 0;
-    const solveRecursive = (r: number, c: number): boolean => {
+    const MAX_DEPTH = 1500;
+    const solveRecursive = (r: number, c: number, depth: number): boolean => {
       iterations++;
       if (iterations > 1000000) return false; // Safety limit
+      if (depth > MAX_DEPTH) return false;
       
       if (c === size) { r++; c = 0; }
       if (r === size) return true;
-      if (resultGrid[r][c] !== 0) return solveRecursive(r, c + 1);
+      if (resultGrid[r][c] !== 0) return solveRecursive(r, c + 1, depth + 1);
       
       for (let val = 1; val <= size; val++) {
         if (isValid(r, c, val)) {
           resultGrid[r][c] = val;
-          if (solveRecursive(r, c + 1)) return true;
+          if (solveRecursive(r, c + 1, depth + 1)) return true;
           resultGrid[r][c] = 0;
         }
       }
       return false;
     };
 
-    const solved = solveRecursive(0, 0);
+    const solved = solveRecursive(0, 0, 0);
     
     return {
       solution: solved ? resultGrid : null,

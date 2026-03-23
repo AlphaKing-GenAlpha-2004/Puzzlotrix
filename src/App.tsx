@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PuzzleType, ThemeType, PuzzleState, SolverConfig } from './types';
+import { PuzzleType, ThemeType, PuzzleState, SolverConfig, Difficulty } from './types';
 import { Background } from './components/Backgrounds';
 import { Controls } from './components/Controls';
 import { StatsPanel } from './components/StatsPanel';
@@ -17,16 +17,31 @@ import { SolverEngine } from './solvers/SolverEngine';
 import { calculateStateSpace } from './utils/math';
 import { motion, AnimatePresence } from 'motion/react';
 import { Github, Info, AlertTriangle, CheckCircle2, Play } from 'lucide-react';
+import { RNG } from './utils/rng';
 import { ValidationEngine, ValidationResult } from './services/ValidationEngine';
 import { InfoModal } from './components/InfoModal';
-import { Leaderboard } from './components/Leaderboard';
+import { Leaderboard as LeaderboardUI } from './components/Leaderboard';
+import { Leaderboard as LeaderboardStore } from './core/Leaderboard';
+import { Validator } from './core/Validator';
 import { Trophy } from 'lucide-react';
+
+const safeClone = (obj: any) => {
+  if (obj === undefined) return undefined;
+  try {
+    const json = JSON.stringify(obj);
+    if (json === undefined) return undefined;
+    return JSON.parse(json);
+  } catch (e) {
+    return obj;
+  }
+};
 
 export default function App() {
   const [puzzleType, setPuzzleType] = useState<PuzzleType>('math-latin-square');
   const [gridSize, setGridSize] = useState<number>(5);
   const [rows, setRows] = useState<number>(4);
   const [cols, setCols] = useState<number>(4);
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [seed, setSeed] = useState<number | null>(123456);
   const [theme, setTheme] = useState<ThemeType>('dark');
   const [solverConfig, setSolverConfig] = useState<SolverConfig>({
@@ -35,35 +50,59 @@ export default function App() {
     instant: true
   });
   const [puzzle, setPuzzle] = useState<PuzzleState | null>(null);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [isSolving, setIsSolving] = useState(false);
   const [genTime, setGenTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [generationCount, setGenerationCount] = useState(0);
   const [selectedCell, setSelectedCell] = useState<{ r: number; c: number } | null>(null);
-  const [validation, setValidation] = useState<ValidationResult>({ isValid: true, conflicts: [], errors: [] });
+  const [validation, setValidation] = useState<ValidationResult>({ 
+    isValid: true, 
+    isComplete: false, 
+    isFull: false, 
+    conflicts: [], 
+    errors: [] 
+  });
   const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
   const [timer, setTimer] = useState(0);
+  const [hasStarted, setHasStarted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
-  const [username, setUsername] = useState<string>(localStorage.getItem('puzzlotrix_user') || '');
+  const [username, setUsername] = useState<string>('');
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('puzzlotrix_user');
+    if (savedUser) setUsername(savedUser);
+  }, []);
 
   useEffect(() => {
     let interval: any;
-    if (puzzle && !puzzle.isSolved && !isSolving && !isPaused) {
+    if (puzzle && !puzzle.isSolved && !isSolving && !isPaused && hasStarted) {
       interval = setInterval(() => {
         setTimer(prev => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [puzzle?.isSolved, isSolving, puzzle?.generationId, isPaused]);
+  }, [puzzle?.isSolved, isSolving, puzzle?.generationId, isPaused, hasStarted]);
+
+  useEffect(() => {
+    setLeaderboard(LeaderboardStore.get(puzzleType, gridSize));
+  }, [puzzleType, gridSize]);
 
   useEffect(() => {
     // Reset puzzle state when grid size changes
     setPuzzle(null);
-    setValidation({ isValid: true, conflicts: [], errors: [] });
+    setValidation({ 
+      isValid: true, 
+      isComplete: false, 
+      isFull: false, 
+      conflicts: [], 
+      errors: [] 
+    });
     setTimer(0);
+    setHasStarted(false);
     setIsPaused(false);
     setError(null);
     setSuccess(null);
@@ -72,6 +111,12 @@ export default function App() {
   }, [gridSize, rows, cols, puzzleType]);
 
   const generatePuzzle = useCallback(() => {
+    const validation = Validator.canGenerate(puzzleType, gridSize, seed || undefined);
+    if (!validation.valid) {
+      setError(validation.message || "Invalid generation parameters.");
+      return;
+    }
+
     const startTime = performance.now();
     let data: any;
     let solution: any;
@@ -96,13 +141,14 @@ export default function App() {
             const nearestRoot = Math.round(root);
             finalSize = Math.max(4, nearestRoot * nearestRoot);
           }
-          const sudokuData = SudokuEngine.generate(finalSize, currentSeed);
+          const subgridSize = Math.sqrt(finalSize);
+          const sudokuData = SudokuEngine.generate(subgridSize, difficulty, new RNG(currentSeed));
           data = sudokuData.grid;
           solution = sudokuData.solution;
           break;
         }
         case 'maze':
-          data = MazeEngine.generate(clampedSize, currentSeed, solverConfig.genAlgorithm);
+          data = MazeEngine.generate(clampedSize, new RNG(currentSeed));
           solution = null; // Maze solution is found by solver
           break;
         case 'n-queens':
@@ -113,10 +159,15 @@ export default function App() {
           data = MinesweeperEngine.generate(clampedSize, currentSeed);
           solution = data.grid; // In minesweeper, the grid is the solution
           break;
-        case 'nonogram':
-          data = NonogramEngine.generate(clampedSize, currentSeed);
-          solution = data.solution;
+        case 'nonogram': {
+          const nonoData = NonogramEngine.generate(clampedSize, difficulty, new RNG(currentSeed));
+          data = {
+            userGrid: nonoData.userGrid,
+            clues: nonoData.clues
+          };
+          solution = nonoData.solution;
           break;
+        }
         case 'kenken':
           data = KenKenEngine.generate(clampedSize, currentSeed);
           solution = data.solution;
@@ -143,22 +194,34 @@ export default function App() {
       setPuzzle({
         type: puzzleType,
         size: finalSize,
+        difficulty: difficulty,
         rows: finalRows,
         cols: finalCols,
         seed: seed,
         actualSeed: currentSeed,
         generationId: generationCount,
         data: data,
-        initialData: JSON.parse(JSON.stringify(data)),
+        initialData: safeClone(data),
+        grid: [], // Initialize grid
+        initialGrid: [], // Initialize initialGrid
         solution: solution,
-        isSolved: false
+        startTime: Date.now(),
+        isSolved: false,
+        errors: []
       });
       setGenTime(performance.now() - startTime);
       setTimer(0);
+      setHasStarted(false);
       setIsPaused(false);
       setError(null);
       setSuccess(null);
-      setValidation({ isValid: true, conflicts: [], errors: [] });
+      setValidation({ 
+        isValid: true, 
+        isComplete: false, 
+        isFull: false, 
+        conflicts: [], 
+        errors: [] 
+      });
       setSelectedCell(null);
     } catch (err) {
       console.error("Generation failed:", err);
@@ -184,6 +247,12 @@ export default function App() {
   const handleSolve = async () => {
     if (!puzzle || isSolving) return;
     
+    const validation = Validator.canSolve(puzzle.type, puzzle.size, puzzle.rows, puzzle.cols);
+    if (!validation.valid) {
+      setError(validation.message || "Solve disabled for this complexity.");
+      return;
+    }
+
     setIsSolving(true);
     setError(null);
     setSuccess(null);
@@ -197,7 +266,7 @@ export default function App() {
       const shouldAnimate = (isSliding || (isMaze && puzzle.size <= 500)) && (!solverConfig.instant || isMaze);
       
       if (shouldAnimate) {
-        let speed = Math.max(1, 101 - solverConfig.speed);
+        let speed = Math.max(1, 101 - (solverConfig.speed || 50));
         if (isMaze && solverConfig.instant) speed = 1; // Fast animation if instant is on for maze
         
         if (isSliding && result.solution) {
@@ -262,19 +331,24 @@ export default function App() {
           return prev;
         }
 
-        let newData = JSON.parse(JSON.stringify(prev.data));
+        setSuccess(result.message || "AI Solved Successfully");
+        setValidation({ isValid: true, isComplete: true, isFull: true, conflicts: [], errors: [] });
+
+        let newData = safeClone(prev.data);
         if (['sudoku', 'math-latin-square', 'kenken', 'nonogram', 'sliding-puzzle'].includes(prev.type)) {
           if (prev.type === 'nonogram') {
-            newData.userGrid = JSON.parse(JSON.stringify(result.solution));
+            newData.userGrid = safeClone(result.solution);
           } else if (prev.type === 'math-latin-square' || prev.type === 'kenken') {
-            newData.grid = JSON.parse(JSON.stringify(result.solution));
+            newData.grid = safeClone(result.solution);
           } else if (prev.type === 'sliding-puzzle') {
             const path = result.solution;
-            const lastGrid = path[path.length - 1];
-            newData.grid = JSON.parse(JSON.stringify(lastGrid));
-            newData.emptyIdx = lastGrid.indexOf(0);
+            if (path && path.length > 0) {
+              const lastGrid = path[path.length - 1];
+              newData.grid = safeClone(lastGrid);
+              newData.emptyIdx = lastGrid.indexOf(0);
+            }
           } else {
-            newData = JSON.parse(JSON.stringify(result.solution));
+            newData = safeClone(result.solution);
           }
         }
 
@@ -283,14 +357,13 @@ export default function App() {
           data: newData,
           solution: result.solution,
           isSolved: true,
+          isAISolved: true,
           solveStats: finalStats,
           moves: isSliding ? (result.solution.length - 1) : prev.moves
         };
       });
       
       setTimer(Math.floor((solveEndTime - solveStartTime) / 1000));
-      setSuccess("Solved Correctly");
-      setValidation({ isValid: true, isComplete: true, isFull: true, conflicts: [], errors: [] });
 
       // Auto-submit score if it was a manual solve (not AI solve)
       // Actually, let's only submit if it's a manual solve. 
@@ -333,6 +406,8 @@ export default function App() {
       return;
     }
 
+    setHasStarted(true);
+
     if (puzzle.type === 'sliding-puzzle') {
       const { grid, emptyIdx, rows, cols } = puzzle.data;
       const targetIdx = r * cols + c;
@@ -370,7 +445,7 @@ export default function App() {
           ...puzzle,
           data: { ...puzzle.data, grid: newGrid, emptyIdx: newEmptyIdx },
           moves: (puzzle.moves || 0) + 1,
-          undoStack: [...(puzzle.undoStack || []), JSON.parse(JSON.stringify(puzzle.data))]
+          undoStack: [...(puzzle.undoStack || []), safeClone(puzzle.data)]
         };
 
         // Check win
@@ -384,7 +459,8 @@ export default function App() {
         setPuzzle(newPuzzle);
       }
     } else if (puzzle.type === 'minesweeper') {
-      if (puzzle.data.revealed[r][c] || puzzle.data.flagged[r][c]) return;
+      if (!puzzle.data.revealed || !puzzle.data.flagged) return;
+      if (puzzle.data.revealed[r]?.[c] || puzzle.data.flagged[r]?.[c]) return;
       
       const newRevealed = puzzle.data.revealed.map((row: any) => [...row]);
       const newGrid = puzzle.data.grid.map((row: any) => [...row]);
@@ -466,8 +542,8 @@ export default function App() {
         return;
       }
       
-      const isStart = r === puzzle.data.start.r && c === puzzle.data.start.c;
-      const isEnd = r === puzzle.data.end.r && c === puzzle.data.end.c;
+      const isStart = puzzle.data.start && r === puzzle.data.start.r && c === puzzle.data.start.c;
+      const isEnd = puzzle.data.end && r === puzzle.data.end.r && c === puzzle.data.end.c;
       
       if (isStart) {
         setIsDragging(isDragging === 'start' ? null : 'start');
@@ -485,13 +561,13 @@ export default function App() {
       if (isDragging) {
         const newData = { ...puzzle.data };
         if (isDragging === 'start') {
-          if (r === newData.end.r && c === newData.end.c) {
+          if (newData.end && r === newData.end.r && c === newData.end.c) {
             setError("Start and End cannot be on the same cell.");
             return;
           }
           newData.start = { r, c };
         } else {
-          if (r === newData.start.r && c === newData.start.c) {
+          if (newData.start && r === newData.start.r && c === newData.start.c) {
             setError("Start and End cannot be on the same cell.");
             return;
           }
@@ -538,6 +614,7 @@ export default function App() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!puzzle || !selectedCell || isSolving || puzzle.isSolved || isPaused) return;
+    setHasStarted(true);
 
     if (['sudoku', 'kenken', 'math-latin-square'].includes(puzzle.type)) {
       const key = e.key;
@@ -574,7 +651,7 @@ export default function App() {
     if (!puzzle) return;
     setPuzzle({
       ...puzzle,
-      data: JSON.parse(JSON.stringify(puzzle.initialData)),
+      data: safeClone(puzzle.initialData),
       isSolved: false,
       solution: undefined,
       solveStats: undefined,
@@ -582,6 +659,7 @@ export default function App() {
       undoStack: []
     });
     setTimer(0);
+    setHasStarted(false);
     setError(null);
     setSuccess(null);
     setSelectedCell(null);
@@ -616,7 +694,7 @@ export default function App() {
       setSuccess("Solved Correctly");
       setPuzzle({ ...puzzle, isSolved: true });
       
-      // Submit score to backend
+      // Submit score to leaderboard
       submitScore(puzzle, timer);
     } else if (!result.isFull) {
       setError("Incomplete: Some cells are empty.");
@@ -633,70 +711,71 @@ export default function App() {
     const revealedPuzzle = {
       ...puzzle,
       isSolved: true,
-      data: JSON.parse(JSON.stringify(puzzle.data))
+      isRevealed: true,
+      data: safeClone(puzzle.data)
     };
 
     // Overwrite userGrid with solutionGrid
     if (['sudoku', 'math-latin-square', 'kenken', 'nonogram', 'n-queens', 'minesweeper'].includes(puzzle.type)) {
       if (puzzle.type === 'nonogram') {
-        revealedPuzzle.data.userGrid = JSON.parse(JSON.stringify(puzzle.solution));
+        revealedPuzzle.data.userGrid = safeClone(puzzle.solution);
       } else if (puzzle.type === 'math-latin-square' || puzzle.type === 'kenken') {
-        revealedPuzzle.data.grid = JSON.parse(JSON.stringify(puzzle.solution));
+        revealedPuzzle.data.grid = safeClone(puzzle.solution);
       } else if (puzzle.type === 'n-queens') {
         if (puzzle.solution) {
-          revealedPuzzle.data = JSON.parse(JSON.stringify(puzzle.solution));
+          revealedPuzzle.data = safeClone(puzzle.solution);
         } else {
-          // If no solution, we can't reveal easily without AI solve
           setError("Use AI Solve to find the solution for N-Queens.");
           return;
         }
       } else if (puzzle.type === 'minesweeper') {
         revealedPuzzle.data.revealed = revealedPuzzle.data.revealed.map((row: any) => row.map(() => true));
       } else {
-        revealedPuzzle.data = JSON.parse(JSON.stringify(puzzle.solution));
+        revealedPuzzle.data = safeClone(puzzle.solution);
       }
-    } else if (puzzle.type === 'sliding-puzzle') {
-      revealedPuzzle.data.grid = JSON.parse(JSON.stringify(puzzle.solution));
+    } else if (puzzle.type === 'sliding-puzzle' && puzzle.solution) {
+      revealedPuzzle.data.grid = safeClone(puzzle.solution);
       revealedPuzzle.data.emptyIdx = puzzle.solution.length - 1;
     }
 
     setPuzzle(revealedPuzzle);
-    setSuccess("Solved Correctly");
+    setSuccess("Solution Revealed. Leaderboard submission disabled.");
     setValidation({ isValid: true, isComplete: true, isFull: true, conflicts: [], errors: [] });
     setError(null);
   };
 
-  const submitScore = async (p: PuzzleState, time: number) => {
+  const submitScore = (p: PuzzleState, time: number) => {
+    if (p.isRevealed || p.isAISolved) return;
+    
     let name = username;
     if (!name) {
       name = prompt("Enter your name for the leaderboard:") || "Anonymous";
-      setUsername(name);
-      localStorage.setItem('puzzlotrix_user', name);
+      if (name) {
+        setUsername(name);
+        localStorage.setItem('puzzlotrix_user', name);
+      } else {
+        name = "Anonymous";
+      }
     }
 
-    try {
-      await fetch('/api/leaderboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: name,
-          puzzle_type: p.type,
-          grid_size: p.size,
-          time_ms: time * 1000,
-          moves: p.moves || 0,
-          seed: p.actualSeed
-        })
-      });
-      setSuccess("Score submitted to leaderboard!");
-    } catch (err) {
-      console.error("Failed to submit score:", err);
-    }
+    const entry = {
+      puzzleType: p.type,
+      gridSize: p.size,
+      seed: String(p.actualSeed || ''),
+      username: name,
+      solveTime: time,
+      moves: p.moves || 0,
+      timestamp: Date.now()
+    };
+
+    LeaderboardStore.submit(entry);
+    setLeaderboard(LeaderboardStore.get(p.type, p.size));
   };
 
   const stateSpace = calculateStateSpace(puzzleType, gridSize, puzzle?.rows, puzzle?.cols);
 
   return (
-    <div className="min-h-screen flex flex-col items-center p-4 md:p-8 font-sans transition-colors duration-500">
+    <div className="min-h-screen w-full flex flex-col items-center p-4 md:p-8 font-sans transition-colors duration-500 overflow-y-auto">
       <Background theme={theme} />
       
       <header className="w-full max-w-6xl flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
@@ -747,7 +826,7 @@ export default function App() {
       </header>
 
       <InfoModal isOpen={isInfoModalOpen} onClose={() => setIsInfoModalOpen(false)} />
-      <Leaderboard 
+      <LeaderboardUI 
         isOpen={isLeaderboardOpen} 
         onClose={() => setIsLeaderboardOpen(false)} 
         puzzleType={puzzleType}
@@ -784,6 +863,10 @@ export default function App() {
             onReveal={handleRevealSolution}
             onReset={handleReset}
             isSolving={isSolving}
+            currentGrid={puzzle?.data?.grid || puzzle?.data?.userGrid || puzzle?.grid}
+            puzzleData={puzzle?.data}
+            leaderboard={leaderboard}
+            puzzle={puzzle}
           />
         </motion.div>
 
